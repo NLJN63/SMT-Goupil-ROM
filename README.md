@@ -83,15 +83,26 @@ Les vraies modifications :
 - **Vidéo du Club** (`INT 10h` fonction `FFh`, propre au Club) : cette fonction programme
   le contrôleur vidéo de la carte (ports `3D0h`-`3DFh`) avec l'un de deux jeux de réglages.
   Le choix se fait sur le bit 0 du registre `17h` du 6301 (lu par l'`INT 1Ah` fonction
-  `FDh`). Le jeu choisi quand ce bit est à 1 contient une palette de 16 couleurs
-  (3 bits par composante rouge, vert, bleu). Il ne change pas. L'autre jeu,
-  vraisemblablement celui du moniteur monochrome, change :
+  `FDh`) ; le POST appelle la fonction une seule fois, avec AL égal à ce bit. AL non nul
+  donne le jeu de l'**écran externe** (prise DB9), avec une palette de 16 couleurs (3 bits
+  par composante rouge, vert, bleu) : il ne change pas. AL = 0 donne le jeu de l'**écran
+  LCD interne**, qui change :
   - en V1R1, ses 16 entrées mêlaient vert et bleu sans ordre régulier. La couleur 0 (le fond)
-    y était la plus claire et la couleur 15 était noire : l'image apparaissait apparemment
-    en inverse ;
+    y était la plus claire et la couleur 15 était noire : des pixels sombres sur fond clair ;
   - en V2R1, la couleur n donne le niveau n modulo 8 sur la seule composante verte, de
     0 (noir) à 7 ;
   - deux registres de ce jeu (index `66h`-`67h`) passent aussi de `28h`, `14h` à `24h`, `33h`.
+
+  Sur un Club réel, l'écran LCD ne montre pas de différence visible entre les deux versions.
+
+  N'importe quel programme peut appeler cette fonction. Norton Commander et ses visionneuses
+  (`NC.EXE`, `123VIEW.EXE`, `DBVIEW.EXE`) appellent l'`INT 10h` fonction `FFh` (sur un PC, la
+  mise à jour de l'écran de TopView/DESQview), avec un AL quelconque. Sur un Club réel, le
+  lancement de Norton fait ainsi perdre l'affichage sur le LCD au profit de l'écran externe.
+  La disquette de démonstration du Club charge pour cela, dans son `AUTOEXEC.BAT` avant
+  Norton, `P10AHFF.COM` (47 octets, 30/01/1987) : un programme résident qui intercepte
+  l'`INT 10h` et rend la main sans rien faire quand AH = `FFh`. L'écran choisi au démarrage
+  est ainsi conservé. Le mécanisme est le même avec la V1R1, qui a la même fonction.
 
 En dehors de ces points, le code est identique instruction par instruction : tests du POST,
 interrupteurs, mesure de la mémoire, commandes du moniteur, dialogue avec le 6301.
