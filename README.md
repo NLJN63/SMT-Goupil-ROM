@@ -53,8 +53,48 @@ docs/                      nomenclature PROM de SMT-Goupil
 
 | Fichier | EPROM | C.R.C | Description |
 |---|---|---|---|
-| `CLUB1_U45B.BIN` | 27C256 | 5500 ✓ | Moniteur du Goupil Club V1 (8088, position U45). Un Club réel affiche `G4MON-88 V2R1` : cette version plus récente n'est pas dans le dépôt. Contient `G4MON-88 V1R1` et `CMON-6301` : BIOS 8088 dérivé du G4, plus le dialogue avec le microcontrôleur Hitachi 6301, qui sert d'horloge temps réel et porte sa propre version (`V1R2` sur un Club réel ; liaison série bit à bit sur le 8255). |
+| `CLUB_U45A.BIN` | 27C256 | 4200 | Moniteur du Goupil Club (8088, position U45), `G4MON-88 V2R1` et `CMON-6301` : la version qu'affiche un Club réel (« CMON-6301 V1R2 -- G4MON-88 V2R1 »), plus récente que la V1R1 de `CLUB1_U45B.BIN`. PROM absente du tableau SMT (qui ne donne que l'U45B du Club V1), d'où la somme sans marque. Elle porte l'indice A, la V1R1 l'indice B. Différences avec la V1R1 [ci-dessous](#g4mon-88-v2r1--ce-qui-change-par-rapport-à-la-v1r1). |
+| `CLUB1_U45B.BIN` | 27C256 | 5500 ✓ | Moniteur du Goupil Club V1 (8088, position U45). Contient `G4MON-88 V1R1` et `CMON-6301` : BIOS 8088 dérivé du G4, plus le dialogue avec le microcontrôleur Hitachi 6301, qui sert d'horloge temps réel et porte sa propre version (`V1R2` sur un Club réel ; liaison série bit à bit sur le 8255). |
 | `CLUB_U97A.BIN` | 27C64 | DDC0 ✓ | Générateur de caractères (polices vidéo) du Club, position U97. Presque identique à la police de la carte vidéo G4GA (9 octets d'écart). |
+
+### G4MON-88 V2R1 : ce qui change par rapport à la V1R1
+
+Comparaison des deux ROM désassemblées. Le code de la V2R1 est plus long de 22h octets :
+les routines sont décalées de 21h à 2Ch octets, et la partie haute (`F000:E000h`-`FFFFh` :
+points d'entrée fixes compatibles IBM, polices) est identique, à part les adresses des
+routines déplacées. La bannière ne change pas de forme : `CMON-6301  V1R2 -- G4MON-88  V2R1`.
+Les vraies modifications :
+
+- **Copyright** : la chaîne ` (C) Copyright SMT-Goupil 1986 ` est ajoutée après les noms de
+  version, en tête de ROM. Aucun code ne l'affiche. Elle date la V2R1 de 1986 au plus tôt.
+- **POST, 6301** : il y a une tâche de plus, juste après l'initialisation du 6301 (deux
+  écritures de `00h` dans son registre `1Fh`). Elle écrit `00h` dans le registre `27h`,
+  que la V1R1 n'utilise jamais. Si le 6301 ne répond pas, elle donne le même code d'erreur
+  (03) que les autres échanges avec le 6301. Le rôle de ce registre n'est pas connu :
+  il faudrait le code du 6301 (`CMON-6301`).
+- **Disquette (INT 13h)** : quand le contrôleur 765 est réinitialisé, le BIOS lui envoie la
+  commande Specify (`03h`) avec le premier octet de la table des paramètres de disquette
+  (vecteur `INT 1Eh` : vitesse de pas SRT et temps de déchargement HUT). La V1R1
+  limitait la vitesse de pas : un SRT de `Bh` à `Fh` (5 ms à 1 ms au débit de 500 kbit/s)
+  était ramené à `Ah` (6 ms). La V2R1 envoie l'octet tel quel. La vitesse de pas inscrite
+  dans la table est donc respectée, y compris quand DOS installe la sienne.
+- **Moniteur** (invite `+`) : l'interpréteur appelle chaque commande entre `PUSH DS` et
+  `POP DS`. En V1R1, une commande qui changeait DS dérangeait l'interpréteur pour la suite.
+- **Vidéo du Club** (`INT 10h` fonction `FFh`, propre au Club) : cette fonction programme
+  le contrôleur vidéo de la carte (ports `3D0h`-`3DFh`) avec l'un de deux jeux de réglages.
+  Le choix se fait sur le bit 0 du registre `17h` du 6301 (lu par l'`INT 1Ah` fonction
+  `FDh`). Le jeu choisi quand ce bit est à 1 contient une palette de 16 couleurs
+  (3 bits par composante rouge, vert, bleu). Il ne change pas. L'autre jeu,
+  vraisemblablement celui du moniteur monochrome, change :
+  - en V1R1, ses 16 entrées mêlaient vert et bleu sans ordre régulier. La couleur 0 (le fond)
+    y était la plus claire et la couleur 15 était noire : l'image apparaissait apparemment
+    en inverse ;
+  - en V2R1, la couleur n donne le niveau n modulo 8 sur la seule composante verte, de
+    0 (noir) à 7 ;
+  - deux registres de ce jeu (index `66h`-`67h`) passent aussi de `28h`, `14h` à `24h`, `33h`.
+
+En dehors de ces points, le code est identique instruction par instruction : tests du POST,
+interrupteurs, mesure de la mémoire, commandes du moniteur, dialogue avec le 6301.
 
 ## Goupil 2 — `bios/G2/`
 
