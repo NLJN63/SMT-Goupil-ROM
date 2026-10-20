@@ -42,7 +42,7 @@ pose alors la question « System setup (Y/N) ? ».
 
 | BIOS | Démarrage | Setup |
 |---|---|---|
-| G5 S86 V1 EGA - G5MON-86 V1R3<br>`MSG5.7F-C.BIN` + `MSG5.9F-C.BIN` | <a href="G5/S86/MSG5.7F-C+MSG5.9F-C_demarrage.png"><img src="G5/S86/MSG5.7F-C+MSG5.9F-C_demarrage.png" width="280" alt="démarrage"></a> | — |
+| G5 S86 V1 EGA - G5MON-86 V1R3<br>`MSG5.7F-C.BIN` + `MSG5.9F-C.BIN` | <a href="G5/S86/MSG5.7F-C+MSG5.9F-C_demarrage.png"><img src="G5/S86/MSG5.7F-C+MSG5.9F-C_demarrage.png" width="280" alt="démarrage"></a> | <a href="G5/S86/MSG5.7F-C+MSG5.9F-C_setup.png"><img src="G5/S86/MSG5.7F-C+MSG5.9F-C_setup.png" width="280" alt="setup"></a> |
 | G5 S86 V2 VGA - G5MON-86 V2R3<br>`MSG5.2.5E-B.BIN` + `MSG5.2.6E-B.BIN` | <a href="G5/S86/MSG5.2.5E-B+MSG5.2.6E-B_demarrage.png"><img src="G5/S86/MSG5.2.5E-B+MSG5.2.6E-B_demarrage.png" width="280" alt="démarrage"></a> | <a href="G5/S86/MSG5.2.5E-B+MSG5.2.6E-B_setup.png"><img src="G5/S86/MSG5.2.5E-B+MSG5.2.6E-B_setup.png" width="280" alt="setup"></a> |
 
 ### G5 286
