@@ -21,6 +21,7 @@ pose alors la question « System setup (Y/N) ? ».
 
 | BIOS | Démarrage | Setup |
 |---|---|---|
+| Goupil Club - G4MON-88 V2R1<br>`CLUB_U45A.BIN` | <a href="Club/CLUB_U45A_demarrage.png"><img src="Club/CLUB_U45A_demarrage.png" width="280" alt="démarrage"></a> | — |
 | Goupil Club - G4MON-88 V1R1<br>`CLUB1_U45B.BIN` | <a href="Club/CLUB1_U45B_demarrage.png"><img src="Club/CLUB1_U45B_demarrage.png" width="280" alt="démarrage"></a> | — |
 
 ### G4
