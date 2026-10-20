@@ -53,7 +53,7 @@ docs/                      nomenclature PROM de SMT-Goupil
 
 | Fichier | EPROM | C.R.C | Description |
 |---|---|---|---|
-| `CLUB_U45A.BIN` | 27C256 | 4200 | Moniteur du Goupil Club (8088, position U45), `G4MON-88 V2R1` et `CMON-6301` : la version qu'affiche un Club réel (« CMON-6301 V1R2 -- G4MON-88 V2R1 »), plus récente que la V1R1 de `CLUB1_U45B.BIN`. PROM absente du tableau SMT (qui ne donne que l'U45B du Club V1), d'où la somme sans marque. Elle porte l'indice A, la V1R1 l'indice B. Différences avec la V1R1 [ci-dessous](#g4mon-88-v2r1--ce-qui-change-par-rapport-à-la-v1r1). |
+| `CLUB_U45A.BIN` | 27C256 | 4200 | Moniteur du Goupil Club (8088, position U45), `G4MON-88 V2R1` et `CMON-6301` : la version qu'affiche un Club réel (« CMON-6301 V1R2 -- G4MON-88 V2R1 »), plus récente que la V1R1 de `CLUB1_U45B.BIN`. Dump validé sur une machine réelle : la ROM fonctionne sur un Club. PROM absente du tableau SMT (qui ne donne que l'U45B du Club V1), d'où la somme sans marque. Elle porte l'indice A, la V1R1 l'indice B. Différences avec la V1R1 [ci-dessous](#g4mon-88-v2r1--ce-qui-change-par-rapport-à-la-v1r1). |
 | `CLUB1_U45B.BIN` | 27C256 | 5500 ✓ | Moniteur du Goupil Club V1 (8088, position U45). Contient `G4MON-88 V1R1` et `CMON-6301` : BIOS 8088 dérivé du G4, plus le dialogue avec le microcontrôleur Hitachi 6301, qui sert d'horloge temps réel et porte sa propre version (`V1R2` sur un Club réel ; liaison série bit à bit sur le 8255). |
 | `CLUB_U97A.BIN` | 27C64 | DDC0 ✓ | Générateur de caractères (polices vidéo) du Club, position U97. Presque identique à la police de la carte vidéo G4GA (9 octets d'écart). |
 
