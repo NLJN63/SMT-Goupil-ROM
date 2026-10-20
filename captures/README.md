@@ -156,7 +156,7 @@ pose alors la question « System setup (Y/N) ? ».
 
 | BIOS | Démarrage | Setup |
 |---|---|---|
-| Strator - GLMON-86 V1R3<br>`GLMON-86.10G-A_STRATOR.BIN` + `GLMON-86.10J-A_STRATOR.BIN` | <a href="Strator/GLMON-86.10G-A_STRATOR+GLMON-86.10J-A_STRATOR_demarrage.png"><img src="Strator/GLMON-86.10G-A_STRATOR+GLMON-86.10J-A_STRATOR_demarrage.png" width="280" alt="démarrage"></a> | — |
+| Strator - GLMON-86 V1R3<br>`GLMON-86.10G-A_STRATOR.BIN` + `GLMON-86.10J-A_STRATOR.BIN` | <a href="Strator/GLMON-86.10G-A_STRATOR+GLMON-86.10J-A_STRATOR_demarrage.png"><img src="Strator/GLMON-86.10G-A_STRATOR+GLMON-86.10J-A_STRATOR_demarrage.png" width="280" alt="démarrage"></a> | <a href="Strator/GLMON-86.10G-A_STRATOR+GLMON-86.10J-A_STRATOR_setup.png"><img src="Strator/GLMON-86.10G-A_STRATOR+GLMON-86.10J-A_STRATOR_setup.png" width="280" alt="setup"></a> |
 
 ### RAZ-PWR6
 
