@@ -1,0 +1,5203 @@
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-1
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+
+
+					page ,132
+					title GOUPIL4 PC compatible Rom I/O System
+					subttl ROMFD - floppy driver
+
+				;*.
+				;************************************************************************
+				;*									*
+				;*	FD -- all components of the floppy disk drvier. 		*
+				;*									*
+				;*	  DATE	  RELEASE		COMMENT 			*
+				;*	--------  -------     -------------------------------------	*
+				;*	 1/08/85   V1R4       Attentes actives logicielles		*
+				;*									*
+				;************************************************************************
+				;*.
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-2
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		Definitions						*
+				;*									*
+				;************************************************************************
+			     C	INCLUDE DEFINES.DEF
+ = 0000 		     C	B		equ	byte ptr 0
+ = 0000 		     C	W		equ	word ptr 0
+ = 0000 		     C	P		equ	dword ptr 0
+			     C
+ = 0000 		     C	LB		equ	byte ptr 0
+ = 0001 		     C	HB		equ	byte ptr 1
+ = 0000 		     C	LW		equ	word ptr 0
+ = 0002 		     C	HW		equ	word ptr 2
+ = 0002 		     C	SEL		equ	word ptr 2
+ = 0000 		     C	OFF		equ	word ptr 0
+			     C
+ = 0000 		     C	NULL		equ	0
+ = 0000 		     C	FALSE		equ	0
+ =-0001 		     C	TRUE		equ	(not false)
+ = 0000 		     C	E_OK		equ	0
+			     C	INCLUDE PC.DEF
+			     C	DSEG	macro	seg, text, reg
+			     C	assume	DS:seg
+			     C		mov	reg, seg
+			     C		mov	ds, reg
+			     C	endm
+			     C
+ =			     C	jc	equ	jb
+ =			     C	jnc	equ	jnb
+			     C
+			     C	clr	macro	reg
+			     C		xor	reg,reg
+			     C	endm
+			     C
+			     C	jmps	macro	add
+			     C		jmp	short	add
+			     C	endm
+			     C
+			     C	pushE	macro		; save (everything) onto stack
+			     C		push	ax
+			     C		push	bx
+			     C		push	cx
+			     C		push	dx
+			     C		push	si
+			     C		push	di
+			     C		push	bp
+			     C		push	ds
+			     C		push	es
+			     C	endm
+			     C
+			     C	popE	macro		; restore (everything) from stack
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-3
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+			     C		pop	es
+			     C		pop	ds
+			     C		pop	bp
+			     C		pop	di
+			     C		pop	si
+			     C		pop	dx
+			     C		pop	cx
+			     C		pop	bx
+			     C		pop	ax
+			     C	endm
+			     C	Regs	struc		; register layout on stack
+ 0000  ????		     C		RES	dw	?
+ 0002  ????		     C		RDS	dw	?
+ 0004  ????		     C		RBP	dw	?
+ 0006  ????		     C		RDI	dw	?
+ 0008  ????		     C		RSI	dw	?
+ 000A  ????		     C		RDX	dw	?
+ 000C  ????		     C		RCX	dw	?
+ 000E  ????		     C		RBX	dw	?
+ 0010  ????		     C		RAX	dw	?
+ 0012			     C	Regs	ends
+			     C
+			     C	INCLUDE MACROS.INC
+			     C
+			     C	morg	macro	 arg1  ;overlap detection macro
+			     C		if1
+			     C		if $ gt arg1
+			     C		%out morg arg1 overlapping something!!!
+			     C		endif
+			     C		endif
+			     C		org arg1
+			     C		endm
+			     C
+			     C	link	macro	arg1,arg2	;set and print binlink info
+			     C		if1
+			     C		.radix	16
+			     C		outmsg	cut,arg1,%(arg2)
+			     C		outmsg	binlink,arg1,%(arg2-0c000h)
+			     C		.radix	10
+			     C		endif
+			     C		org	arg2
+			     C		endm
+			     C
+			     C	outmsg	macro	arg1,arg2,arg3
+			     C		%out arg1 arg2 to arg3
+			     C		endm
+			     C
+			     C	INCLUDE RDP.EXT
+			     C	;-------------------- ROM Data Page definitions
+			     C
+			     C	set_RDP macro reg
+			     C	Dseg	RDP using reg
+			     C	endm
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-4
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+			     C
+ 0000			     C	RDP	segment at 40h			; ROM Data Page
+			     C
+			     C	; system configuration
+			     C
+			     C	extrn	ser_base	: word		; base port addrs for serial comm
+			     C	extrn	par_base	: word		; base port addrs for parallel
+			     C
+			     C	extrn	equip_vect	: word		; system equipment vector
+			     C	extrn	top_memory	: word		; memory size, in 1K increments
+			     C
+			     C	; keyboard data
+			     C
+			     C	extrn	kb_state1	: byte		; keyboard current state
+			     C	extrn	kb_state2	: byte		; more keyboard state
+			     C	extrn	kb_keycode	: byte		; kb input via alted keypad
+			     C
+			     C	extrn	kb_head 	: word		; head ptr of keyboard buffer
+			     C	extrn	kb_tail 	: word		; tail of keyboard buffer
+			     C	extrn	kb_buffer	: word		; keyboard buffer area
+			     C	extrn	kb_buff_last	: byte		; end of keyboard buffer
+			     C
+			     C	; diskette data
+			     C
+			     C	extrn	fd_seek 	: byte		; drive recalibration flags
+			     C	extrn	fd_motor	: byte		; motor status
+			     C	extrn	fd_timeout	: byte		; motor off timeout count
+			     C
+			     C	extrn	fd_result	: byte		; result code for previous operation
+			     C	extrn	fd_status	: byte		; status bytes from floppy controller
+			     C
+			     C	; video display data
+			     C
+			     C	extrn	crt_mode	: byte		; current display mode
+			     C	extrn	crt_cols	: word		; curr screen columns
+			     C	extrn	crt_regen_leng	: word		; length of regen buffer, in bytes
+			     C	extrn	crt_regen_base	: word		; base of regen buffer
+			     C
+			     C	extrn	crt_curs_pos	: word		; cursor locations for text pages
+			     C	extrn	crt_curs_attrs	: word		; cursor attributes
+			     C	extrn	crt_curr_page	: byte		; current display page
+			     C
+			     C	extrn	crt_iobase	: word		; crt controller port addr
+			     C	extrn	crt_mode_reg	: byte		; copy of curr mode register setting
+			     C	extrn	crt_palette	: byte		; copy of curr palette reg setting
+			     C
+			     C	; tod timer data
+			     C
+			     C	extrn	tmr_counter	: dword 	; timer tick counter
+			     C	extrn	tmr_overflow	: byte		; 24 hour overflow
+			     C
+			     C	; system data area
+			     C
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-5
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+			     C	extrn	break_flag	: byte		; bit 7 set on break key event
+			     C	extrn	reset_flag	: word		; set to 4147h on warm boot
+			     C
+			     C	; hard disk area
+			     C
+			     C	extrn	hd_status	: byte
+			     C	extrn	n_drives	: byte
+			     C	extrn	hd_flags	: byte
+			     C	extrn	hd_cbits	: byte
+			     C
+			     C	; printer/serial data
+			     C
+			     C	extrn	par_timeout	: byte		; timeout for parallel ports
+			     C	extrn	ser_timeout	: byte		; timeouts for rs232 ports
+			     C
+			     C	; auxilary keyboard data area
+			     C
+			     C	extrn	kb_buff_start	: word		; ptr to start of kb buffer
+			     C	extrn	kb_buff_end	: word		; ptr to end of kb buffer
+			     C
+ 0000			     C	RDP ends
+
+ = 0001 			FD_ERR_CMD	equ	1		; bad FDC command or parm
+ = 0002 			FD_ERR_HDR	equ	2		; no header address marker
+ = 0003 			FD_ERR_WP	equ	3		; write protected
+ = 0004 			FD_ERR_FIND	equ	4		; sector not found
+ = 0008 			FD_ERR_DMA	equ	8		; faulty dma operation
+ = 0009 			FD_ERR_64K	equ	9		; dma boundary error
+ = 0010 			FD_ERR_CRC	equ	010h		; bad checksum
+ = 0020 			FD_ERR_FDC	equ	020h		; controller failure
+ = 0040 			FD_ERR_SEEK	equ	040h		; seek op failed
+ = 0080 			FD_ERR_TO	equ	080h		; timeout error
+
+ = 0080 			FD_INT_BIT	equ	080h		; interrupt ready flag for FD_Seek
+
+
+				parms struc
+ 0000  ??			    fd_parm1	db	?
+ 0001  ??			    fd_parm2	db	?
+ 0002  ??			    fd_mwait	db	?
+ 0003  ??			    fd_secsize	db	?
+ 0004  ??			    fd_sectrk	db	?
+ 0005  ??			    fd_gap1	db	?
+ 0006  ??			    fd_dtl	db	?
+ 0007  ??			    fd_gap2	db	?
+ 0008  ??			    fd_fbyte	db	?
+ 0009  ??			    fd_hsettle	db	?
+ 000A  ??			    fd_start	db	?
+ 000B				parms ends
+
+ 0000				IVT	segment at 0
+ 0000				IVT	ends
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-6
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				Cgroup	group	code
+ 0000				code	segment public word
+				assume	cs:CGROUP
+
+				;*.
+				;************************************************************************
+				;*
+				;*	Set and print binary link info for this module
+				;*
+				;************************************************************************
+				;*.
+
+				     link	romfd,0ec40h
+ EC40			      + 	org	0ec40h
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-7
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		Publics & Externals					*
+				;*									*
+				;************************************************************************
+
+				public	Dev_Init
+				public	FD_RIOS_entry
+				public	FD_Parms
+
+				;************************************************************************
+				;*									*
+				;*		call here to initialize floppy driver			*
+				;*		(must be first thing in module) 			*
+				;*									*
+				;************************************************************************
+
+ EC40  EB 42 90 			jmp	Dev_Init	;initilialize this driver
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-8
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_Motor_On  (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	turn on floppy disk motor					*
+				;*									*
+				;*	ENTRY:	AL= drive number					*
+				;*	EXIT:	(none)							*
+				;*	MODIFIES:   All GP registers					*
+				;*									*
+				;************************************************************************
+ EC43				FD_Motor_On:
+ EC43  8A C8				mov	cl,al			; save drive #
+ EC45  B0 10				mov	al,010h 		; drive enable bit
+ EC47  D2 E0				shl	al,cl
+ EC49  0A C1				or	al,cl			; drive select
+ EC4B  0C 0C				or	al,0Ch			; enable FDC & no reset
+ EC4D  BA 03F2				mov	dx, 03F2h
+ EC50  EE				out	dx,al
+
+ EC51  C3				ret
+
+				;************************************************************************
+				;*
+				;*	Set up PC compatible org for S/W floppy interrupt
+				;*
+				;************************************************************************
+
+					morg	0ec59h
+ EC59			      + 	org 0ec59h
+ EC59				FD_RIOS_entry:
+ EC59  EB 69 90 			jmp	fd_rios
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-9
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+
+				;************************************************************************
+				;*									*
+				;*		Local Data (in ROM)					*
+				;*									*
+				;************************************************************************
+						; error list for status reg 1 bits
+ EC5C  02 03 04 00		cmd_errs db	FD_ERR_HDR, FD_ERR_WP, FD_ERR_FIND, 0
+ EC60  08 10 00 04			 db	FD_ERR_DMA, FD_ERR_CRC, 0, FD_ERR_FIND
+
+						; parm tables for Read, Write, Verify, Format
+ EC64  E6 C5 E6 4D		fdc_cmds db	0E6h, 0C5h, 0E6h, 04Dh	; controller commands
+ EC68  46 4A 42 4A		dma_cmds db	046h, 04Ah, 042h, 04Ah	; dma direction commands
+ EC6C  00 80 00 80		m_status db	0,    080h, 0,	  080h	; motor_status R/W flag
+
+ EC70  01 02 04 08		bits		db	1,2,4,8
+
+ EC74  08			reset_bits	db	00001000b	; all drives off
+ EC75  18					db	00011000b	; drive 0 on
+ EC76  29					db	00101001b	; drive 1 on
+ EC77  39					db	00111001b	; drives 0 & 1 on
+
+ EC78  4A					db	01001010b	; drive 2 on
+ EC79  5A					db	01011010b	; drives 0 & 2 on
+ EC7A  69					db	01101001b	; drives 1 & 2 on
+ EC7B  79					db	01111001b	; drives 0, 1 & 2 on
+
+ EC7C  8B					db	10001011b	; drive 3 on
+ EC7D  9B					db	10011011b	; drives 0 & 3 on
+ EC7E  A9					db	10101001b	; drives 1 & 3 on
+ EC7F  B9					db	10111001b	; drives 0, 1 & 3 on
+
+ EC80  CA					db	11001010b	; drives 2 & 3 on
+ EC81  DA					db	11011010b	; drives 0, 2 & 3 on
+ EC82  E9					db	11101001b	; drives 1, 2 & 3 on
+ EC83  F9					db	11111001b	; drives 0, 1, 2 & 3 on
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-10
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		DEV_Init (public)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Floppy disk Rios Initialization 				*
+				;*									*
+				;*	ENTRY:	none							*
+				;*									*
+				;*	EXIT:	none							*
+				;*									*
+				;*	MODIFIES:   All GP registers					*
+				;*									*
+				;************************************************************************
+ EC84				Dev_Init:
+ EC84  1E				push	ds
+				Dseg	IVT using ax
+ EC85  B8 ---- R	      + 	mov	ax, IVT
+ EC88  8E D8		      + 	mov	ds, ax
+					assume	ds:IVT
+
+ EC8A  9C				pushf				; no interrupts allowed
+ EC8B  FA				cli
+
+ EC8C  C7 06 004C EC59 R		mov	IVT:[13h*4].LW, offset Cgroup:FD_RIOS_entry	; FD RIOS entry
+ EC92  8C 0E 004E			mov	IVT:[13h*4].HW, cs
+
+ EC96  C7 06 0038 EF57 R		mov	IVT:[0Eh*4].LW, offset Cgroup:FD_IRQ	; FD Interrupt entry
+ EC9C  8C 0E 003A			mov	IVT:[0Eh*4].HW, cs
+
+ ECA0  C7 06 0078 EFC7 R		mov	IVT:[1Eh*4].LW, offset Cgroup:FD_Parms	; FD parameter table
+ ECA6  8C 0E 007A			mov	IVT:[1Eh*4].HW, cs
+
+ ECAA  9D				popf				; restore interrupt state
+
+				Dseg	RDP using ax
+ ECAB  B8 ---- R	      + 	mov	ax, RDP
+ ECAE  8E D8		      + 	mov	ds, ax
+					assume	ds:RDP
+					clr	ax
+ ECB0  33 C0		      + 	xor	ax,ax
+ ECB2  A2 0000 E			mov	FD_Seek,al
+ ECB5  A2 0000 E			mov	FD_Result,al
+ ECB8  A2 0000 E			mov	FD_Motor, al
+
+ ECBB  2E: A0 EFC9 R			mov	al,Cgroup:FD_Parms.fd_mwait	; reset motor wait time
+ ECBF  A2 0000 E			mov	FD_Timeout,al
+
+ ECC2  1F				pop	ds
+					assume	ds:nothing
+ ECC3  C3				ret
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-11
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-12
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_Rios (S/W interrupt) 				*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Floppy disk Rios interface					*
+				;*									*
+				;*	ENTRY (for all functions):					*
+				;*		AH = Function code					*
+				;*		IVT #1Eh points to disk parms				*
+				;*									*
+				;*	EXIT (for all functions):					*
+				;*		PSW.C clear: no error (AH= 0)				*
+				;*		PSW.C set:   AH= error value				*
+				;*									*
+				;*	MODIFIES:	All registers but AX preserved. 		*
+				;*	ASSUMES:	All values are in proper range (no checking).	*
+				;*	LIMITATIONS:	Only one track may be accessed per operation.	*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*	Fn0: reset disk system --  FDC is reset, next op to any drive	*
+				;*	will cause head recalibration.					*
+				;*									*
+				;*	ENTRY:	AH= 0							*
+				;*	EXIT:	(none)							*
+				;*----------------------------------------------------------------------*
+				;*	Fn1: read system status from last operation			*
+				;*									*
+				;*	ENTRY:	AH= 1							*
+				;*	EXIT:	AL= status value					*
+				;*----------------------------------------------------------------------*
+				;*	Fn2: read sectors from one track into memory			*
+				;*									*
+				;*	ENTRY:	AH= 2							*
+				;*		DL= drive number (0-3)					*
+				;*		DH= head number (0-1)					*
+				;*		CH= track number (0-39) 				*
+				;*		CL= sector number (1-9) 				*
+				;*		AL= number of sectors (1-9)				*
+				;*		es:[bx]= address for deposit of data			*
+				;*									*
+				;*	EXIT:	AL= number of sectors properly read			*
+				;*----------------------------------------------------------------------*
+				;*	Fn3: write sectors of one track from memory			*
+				;*									*
+				;*	ENTRY:	AH= 3							*
+				;*		DL= drive number (0-3)					*
+				;*		DH= head number (0-1)					*
+				;*		CH= track number (0-39) 				*
+				;*		CL= sector number (1-9) 				*
+				;*		AL= number of sectors (1-9)				*
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-13
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				;*		es:[bx]= address of data to write			*
+				;*									*
+				;*	EXIT:	AL= number of sectors properly written			*
+				;*----------------------------------------------------------------------*
+				;*	Fn4: verify data checksum of sectors				*
+				;*									*
+				;*	ENTRY:	AH= 4							*
+				;*		DL= drive number (0-3)					*
+				;*		DH= head number (0-1)					*
+				;*		CH= track number (0-39) 				*
+				;*		CL= sector number (1-9) 				*
+				;*		AL= number of sectors (1-9)				*
+				;*									*
+				;*	EXIT:	AL= number of sectors properly verified 		*
+				;*----------------------------------------------------------------------*
+				;*	Fn5: format track						*
+				;*									*
+				;*	ENTRY:	AH= 5							*
+				;*		DL= drive number (0-3)					*
+				;*		DH= head number (0-1)					*
+				;*		CH= track number (0-39) 				*
+				;*		es:[bx]= buffer of address fields, 4 bytes for each	*
+				;*			sector per track (as defined by the disk parms).*
+				;*			Fields: 1) track, 2) head, 3) sector, & 4) bytes*
+				;*			per sector:  0=128, 1=256, 2=512, 3=1024.	*
+				;*									*
+				;*	EXIT:	(none)							*
+				;*									*
+				;************************************************************************
+ ECC4				FD_RIOS:
+ ECC4  FB				sti
+ ECC5  86 C4				xchg	al, ah			; switch cmd & # sectors
+					pushE
+ ECC7  50		      + 	push	ax
+ ECC8  53		      + 	push	bx
+ ECC9  51		      + 	push	cx
+ ECCA  52		      + 	push	dx
+ ECCB  56		      + 	push	si
+ ECCC  57		      + 	push	di
+ ECCD  55		      + 	push	bp
+ ECCE  1E		      + 	push	ds
+ ECCF  06		      + 	push	es
+ ECD0  8B EC				mov	bp,sp			; save stack pointer for ref & exit
+
+					set_RDP bx
+ ECD2  BB ---- R	      + 	mov	bx, RDP
+ ECD5  8E DB		      + 	mov	ds, bx
+					assume	ds:RDP
+
+					clr	bx
+ ECD7  33 DB		      + 	xor	bx,bx
+ ECD9  8E C3				mov	es, bx			; reference disk parm table
+ ECDB  26: C4 36 0078			les	si, es:[1Eh*4].P	; point es:si to disk parms
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-14
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+
+						; only CX, DX, & AX (xchged) are RIOS parms
+ ECE0  3C 01				cmp	al, 1			; 3 way branch
+ ECE2  72 26				jb	f_reset
+ ECE4  77 4A				ja	f_io
+
+				;----- Fn1: system status return
+
+ ECE6				f_status:
+ ECE6  A0 0000 E			mov	al, FD_Result		; set return status in al
+ ECE9  88 46 10 			mov	[bp].RAX.LB, al
+
+				;----- normal & abort exit
+
+ ECEC				f_exit:
+ ECEC  88 46 11 			mov	[bp].RAX.HB, al 	; set return val for ah
+ ECEF  A2 0000 E			mov	FD_Result, al		; set final status
+ ECF2  3C 01				cmp	al, 1			; set PSW.C if error
+ ECF4  F5				cmc
+
+ ECF5  26: 8A 44 02			mov	al, es:[si].fd_mwait	; reset motor wait time
+ ECF9  A2 0000 E			mov	FD_Timeout, al
+
+ ECFC  8B E5				mov	sp, bp			; restore stack frame
+					popE				; restore all registers
+ ECFE  07		      + 	pop	es
+ ECFF  1F		      + 	pop	ds
+ ED00  5D		      + 	pop	bp
+ ED01  5F		      + 	pop	di
+ ED02  5E		      + 	pop	si
+ ED03  5A		      + 	pop	dx
+ ED04  59		      + 	pop	cx
+ ED05  5B		      + 	pop	bx
+ ED06  58		      + 	pop	ax
+
+ ED07				FD_done proc	far
+ ED07  CA 0002				ret	2			; return flag in carry
+ ED0A				FD_done endp
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-15
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+
+				;----- reset the FDC and indicate recal for all drives
+
+ ED0A				f_reset:
+								; only CX, DX, & AX (xchged) are RIOS parms
+ ED0A  E8 EFEE R			call	FD_Reset
+
+ ED0D  B0 01				mov	al, 1			; indicate reset function
+ ED0F  E8 EED3 R			call	sense_status
+
+ ED12  B0 03				mov	al, 3			; drive specify cmd
+ ED14  E8 EF6B R			call	cmd_out
+
+ ED17  26: 8A 04			mov	al, es:[si].fd_parm1	; send parm 1
+ ED1A  E8 EF6B R			call	cmd_out
+
+ ED1D  26: 8A 44 01			mov	al, es:[si].fd_parm2	; send parm 2
+ ED21  E8 EF6B R			call	cmd_out
+
+					clr	al
+ ED24  32 C0		      + 	xor	al,al
+ ED26  EB C4				jmp	f_exit			; return ok
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-16
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+
+				;----- bad parameters or command
+
+ ED28				f_bad_cmd:
+ ED28  B0 01				mov	al, FD_ERR_CMD
+ ED2A  EB C0				jmp	f_exit
+
+				;----- error on DMA
+
+ ED2C				f_dma_error:
+ ED2C  B0 09				mov	al, FD_ERR_64k		; dma boundary error
+ ED2E  EB BC				jmp	f_exit
+
+
+				;----- function for read, write, verify, and format
+
+					; only CX, DX, & AX (xchged) are RIOS parms
+ ED30				f_io:
+ ED30  80 FA 04 			cmp	dl, 4			; test max of 4 drives
+ ED33  73 F3				jae	f_bad_cmd
+
+ ED35  3C 05				cmp	al, 5			; test max cmd #
+ ED37  77 EF				ja	f_bad_cmd
+
+ ED39  C6 46 10 00			mov	[bp].RAX.LB,0		; clear number of sectors transfered
+
+ ED3D  8A D8				mov	bl, al			; use command as byte table index
+					clr	bh			; 2=read,3=write,4=verify,5=format
+ ED3F  32 FF		      + 	xor	bh,bh
+ ED41  53				push	bx			; and save it
+
+ ED42  80 26 0000 E 7F			and	FD_Motor, 07Fh		; clear R/W status
+ ED47  2E: 8A 87 EC6A R 		mov	al, m_status[bx-2]	; indicate operation type: R or W
+ ED4C  08 06 0000 E			or	FD_Motor, al
+
+				;----- set up DMA channel
+
+ ED50  2E: 8A 87 EC66 R 		mov	al, dma_cmds[bx-2]	; DMA cmd op in al
+
+ ED55  26: 8A 4C 03			mov	cl, es:[si].fd_secsize	; get log2(bytes per sector) - 7
+ ED59  8A FC				mov	bh, ah			; sector count * 128 in bx
+					clr	bl
+ ED5B  32 DB		      + 	xor	bl,bl
+ ED5D  D1 EB				shr	bx,1
+ ED5F  D3 E3				shl	bx, cl			; multiply by right power
+ ED61  4B				dec	bx			; byte count -1 in bx
+
+ ED62  FA				cli
+
+ ED63  E6 0C				out	0Ch, al 		; prep DMA channel
+
+ ED65  50				push	ax			; pause
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-17
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+ ED66  50				push	ax
+ ED67  58				pop	ax
+ ED68  58				pop	ax
+
+ ED69  E6 0B				out	0Bh,al			; output op code
+									; calculate 20 bits of address
+ ED6B  8B 46 00 			mov	ax,[bp].RES		; segment
+ ED6E  B1 04				mov	cl,4
+ ED70  D3 C0				rol	ax,cl
+ ED72  8A E8				mov	ch,al
+ ED74  24 F0				and	al,0F0h
+ ED76  03 46 0E 			add	ax,[bp].RBX		; offset
+ ED79  73 02				jnc	io_10
+
+ ED7B  FE C5				inc	ch
+ ED7D				io_10:					; 20 bits in CH|AX
+ ED7D  50				push	ax
+ ED7E  E6 04				out	04h,al
+ ED80  8A C4				mov	al,ah
+ ED82  E6 04				out	04h,al
+ ED84  8A C5				mov	al,ch
+ ED86  24 0F				and	al,0Fh
+ ED88  E6 81				out	81h,al
+									; output byte count
+ ED8A  8A C3				mov	al,bl
+ ED8C  E6 05				out	05h,al
+ ED8E  8A C7				mov	al,bh
+ ED90  E6 05				out	05h,al
+									; set floppy disk I/O channel
+ ED92  B0 02				mov	al, 2
+ ED94  E6 0A				out	0Ah, al
+
+ ED96  FB				sti
+
+ ED97  58				pop	ax
+ ED98  03 C3				add	ax,bx			; test if over 64K boundary
+ ED9A  72 90				jc	f_dma_error		; bad dma op
+
+				;----- see that motor is running & select drive
+
+ ED9C  FA				cli
+ ED9D  C6 06 0000 E FF			mov	FD_Timeout, 0FFh	; use larger counter internally
+
+ EDA2  8A 5E 0A 			mov	bl,[bp].RDX.LB		; get drive number as index
+					clr	bh
+ EDA5  32 FF		      + 	xor	bh,bh
+
+ EDA7  A0 0000 E			mov	al, FD_Motor		; get motor status
+ EDAA  2E: 8A A7 EC70 R 		mov	ah, bits[bx]
+ EDAF  84 C4				test	al, ah			; test for motor running
+ EDB1  75 23				jne	io_30			; motor is on
+
+ EDB3  24 F0				and	al, 0F0h		; all motor bits off
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-18
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+ EDB5  0A C4				or	al, ah			; set this motor on
+
+ EDB7  9C				pushf				; save test on sign bit
+
+ EDB8  A2 0000 E			mov	FD_Motor, al
+ EDBB  8A C3				mov	al, bl
+ EDBD  E8 EC43 R			call	FD_Motor_On		; turn HW on
+
+ EDC0  9D				popf
+ EDC1  79 13				jns	io_30			; no wait on read operation
+
+ EDC3  FB				sti
+ EDC4  26: 8A 44 0A			mov	al, es:[si].fd_start
+					; wait for al/4 seconds for startup
+ EDC8  0A C0				or	al,al			; test for no wait
+ EDCA				io_15:
+ EDCA  74 0A				jz	io_30
+					clr	cx
+ EDCC  33 C9		      + 	xor	cx,cx
+					even
+ EDCE  E2 FE			io_20:	loop	io_20			; DOUBLE IBM-PC VALUE
+ EDD0  E2 FE			io_25:	loop	io_25
+ EDD2  FE C8				dec	al
+ EDD4  EB F4				jmp	io_15			; wait for expired time
+
+ EDD6				io_30:
+ EDD6  FB				sti
+
+				;----- Test for recalibration
+
+ EDD7  8A 5E 0A 			mov	bl,[bp].RDX.LB		; use unit number as index
+					clr	bh
+ EDDA  32 FF		      + 	xor	bh,bh
+ EDDC  2E: 8A 87 EC70 R 		mov	al, bits[bx]
+ EDE1  84 06 0000 E			test	al, FD_Seek
+ EDE5  75 26				jne	io_35			; no recal needed
+
+ EDE7  08 06 0000 E			or	FD_Seek, al		; turn on no recal
+
+ EDEB  B0 07				mov	al, 7			; FDC recal cmd
+ EDED  E8 EF6B R			call	cmd_out
+
+ EDF0  8A 46 0A 			mov	al,[bp].RDX.LB		; send unit #
+ EDF3  E8 EF6B R			call	cmd_out
+
+ EDF6  B0 FF				mov	al,-1			; indicate first recal
+ EDF8  E8 EED3 R			call	sense_status		; get command result
+ EDFB  74 10				je	io_35			; command complete
+
+ EDFD  B0 07				mov	al,7			; FDC recal again because more than 77 tracks
+ EDFF  E8 EF6B R			call	cmd_out
+
+ EE02  8A 46 0A 			mov	al,[bp].RDX.LB		; send unit #
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-19
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+ EE05  E8 EF6B R			call	cmd_out
+
+					clr	al			; indicate seek function
+ EE08  32 C0		      + 	xor	al,al
+ EE0A  E8 EED3 R			call	sense_status		; get command result
+
+				;----- seek to proper track
+
+ EE0D				io_35:
+ EE0D  B0 0F				mov	al, 0Fh 		; FDC seek cmd
+ EE0F  E8 EF6B R			call	cmd_out
+
+ EE12  8B 46 0A 			mov	ax,[bp].RDX		; pass unit/head # to FDC
+ EE15  D0 E4				shl	ah,1
+ EE17  D0 E4				shl	ah,1
+ EE19  0A C4				or	al,ah
+ EE1B  E8 EF6B R			call	cmd_out
+
+ EE1E  8A 46 0D 			mov	al,[bp].RCX.HB		; pass track # to FDC
+ EE21  E8 EF6B R			call	cmd_out
+
+					clr	al			; indicate seek function
+ EE24  32 C0		      + 	xor	al,al
+ EE26  E8 EED3 R			call	sense_status		; get command result
+
+ EE29  26: 8A 6C 09			mov	ch,ES:[si].fd_hsettle	; 1 ms head settling parm
+ EE2D  0A ED				or	ch,ch			; test for no wait
+ EE2F  74 0B				je	s_40
+
+ EE31  D0 E5				shl	ch,1			; parm * 512
+ EE33  73 02				jnc	io_40
+ EE35  32 ED				xor	ch,ch			; maximum time (128ms)
+ EE37				io_40:
+ EE37  32 C9				xor	cl,cl
+ EE39  90				even
+ EE3A  E2 FE			io_45:	loop	io_45
+
+				;----- send command to controller
+
+ EE3C				s_40:
+ EE3C  5B				pop	bx			; retrieve cmd index
+
+ EE3D  80 FB 05 			cmp	bl, 5			; check for format cmd
+ EE40  75 16				jne	io_50			; its R, W, or V
+									; set up parms for format
+ EE42  26: FF 74 08			push	es:[si].fd_fbyte.W
+ EE46  26: FF 74 07			push	es:[si].fd_gap2.W
+ EE4A  26: FF 74 04			push	es:[si].fd_sectrk.W
+ EE4E  26: FF 74 03			push	es:[si].fd_secsize.W
+ EE52  B9 0006				mov	cx, 6
+ EE55  EB 20 90 			jmp	io_55
+ EE58				io_50:
+ EE58  26: FF 74 06			push	es:[si].fd_dtl.W
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-20
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+ EE5C  26: FF 74 05			push	es:[si].fd_gap1.W
+ EE60  26: FF 74 04			push	es:[si].fd_sectrk.W
+ EE64  26: FF 74 03			push	es:[si].fd_secsize.W
+ EE68  FF 76 0C 			push	[bp].RCX		; sector #
+ EE6B  8B 46 0B 			mov	ax, [bp].RDX+1		; head #
+ EE6E  24 7F				and	al, 7Fh 		; mask bit 7 (olivetty)
+ EE70  50				push	ax
+ EE71  FF 76 0D 			push	[bp].RCX+1		; track #
+ EE74  B9 0009				mov	cx, 9
+ EE77				io_55:
+ EE77  8B 46 0A 			mov	ax, [bp].RDX		; get head # & drive #
+ EE7A  D0 E4				shl	ah,1			; head bit at B2
+ EE7C  D0 E4				shl	ah,1
+ EE7E  0A C4				or	al, ah			; or unit # in B0 & B1
+ EE80  50				push	ax			; drive/head
+ EE81  2E: FF B7 EC62 R 		push	fdc_cmds.W[bx-2]	; FDC cmd
+
+ EE86				io_60:
+ EE86  58				pop	ax			; next FDC cmd byte
+ EE87  51				push	cx			; save counter
+ EE88  E8 EF6B R			call	cmd_out
+ EE8B  59				pop	cx
+ EE8C  E2 F8				loop	io_60			; loop til all bytes xferred
+
+				;----- wait for execution & check results
+
+ EE8E  E8 EFD2 R			call	wait_rdy
+ EE91  E8 EF06 R			call	get_status
+
+ EE94  A0 0000 E			mov	al, FD_Status		; check status reg 0
+ EE97  24 C0				and	al, 0C0h
+ EE99  74 1C				je	io_80			; no errors
+
+ EE9B  3C 40				cmp	al, 040h
+ EE9D  75 0C				jne	io_70			; bad FDC
+
+ EE9F  A0 0001 E			mov	al, FD_Status+1 	; check status reg 1
+
+ EEA2  B9 0008				mov	cx, 8			; bit count
+ EEA5				io_65:
+ EEA5  D0 E0				shl	al, 1
+ EEA7  72 07				jc	io_75			; look for MSB on
+ EEA9  E2 FA				loop	io_65
+ EEAB				io_70:
+ EEAB  B0 20				mov	al, FD_ERR_FDC		; bad controller
+ EEAD  EB 08 90 			jmp	io_80
+ EEB0				io_75:
+ EEB0  8B D9				mov	bx, cx
+ EEB2  2E: 8A 87 EC5B R 		mov	al, cmd_errs[bx-1]
+ EEB7				io_80:
+
+				;----- calculate number of sectors xferred
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-21
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+ EEB7  8A 16 0003 E			mov	dl, FD_Status+3 	; check for track wrap
+ EEBB  3A 56 0D 			cmp	dl, [bp].RCX.HB 	; test for same track
+ EEBE  8A 16 0005 E			mov	dl, FD_Status+5 	; use ending sector
+ EEC2  74 06				je	io_85
+
+ EEC4  26: 8A 54 04			mov	dl,es:[si].fd_sectrk	; use # sectors/track + 1
+ EEC8  FE C2				inc	dl
+ EECA				io_85:
+ EECA  2A 56 0C 			sub	dl, [bp].RCX.LB 	; subtract start from end
+ EECD  88 56 10 			mov	[bp].RAX.LB, dl 	; return this number in AL
+ EED0  E9 ECEC R			jmp	f_exit			; all done!
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-22
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		sense_status (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Wait for current command, then Send FDC sense interrupt status	*
+				;*	CoMmanD OUT & return status result.				*
+				;*									*
+				;*	ENTRY:	AL= 0 indicates last cmd was seek or recal		*
+				;*		AL= 1 indicate reset					*
+				;*		AL= -1 indicate last cmd was first recal		*
+				;*		DS = RDP segment					*
+				;*		BP= new stack pointer on error				*
+				;*									*
+				;*	EXIT:	No error:	  Normal return.			*
+				;*		Recal not completed: return non zero condition		*
+				;*		Error condition:  terminate command			*
+				;*				  AL= error type			*
+				;*				  FD_Status(0-6)= FDC status result	*
+				;*									*
+				;*	MODIFIES:	RDP:FD_Status(0-6)				*
+				;*			only ES & SI preserved				*
+				;*									*
+				;************************************************************************
+ EED3				sense_status:
+ EED3  50				push	ax			; save seek flag
+ EED4  E8 EFD2 R			call	wait_rdy		; wait for controller rdy
+
+ EED7  B0 08				mov	al,8			; FDC sense cmd
+ EED9  E8 EF6B R			call	cmd_out
+
+ EEDC  E8 EF06 R			call	get_status		; get sense results
+
+ EEDF  A0 0000 E			mov	al, FD_Status		; check for proper seek
+
+ EEE2  5A				pop	dx
+ EEE3  0A D2				or	dl,dl			; check seek flag
+ EEE5  75 0B				jne	ss_20			; it is a reset or a first recal
+
+ EEE7  24 E0				and	al, 11100000b
+ EEE9				ss_10:
+ EEE9  3C 20				cmp	al, 00100000b		; seek pattern
+
+ EEEB  74 18				je	ss_40			; bad seek
+ EEED  B0 40				mov	al, FD_ERR_SEEK
+ EEEF  E9 ECEC R			jmp	f_exit
+
+ EEF2				ss_20:
+ EEF2  78 0B				js	ss_30			; it is the first recal
+
+ EEF4  24 E0				and	al, 11100000b
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-23
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+ EEF6  3C C0				cmp	al, 11000000b		; reset pattern
+ EEF8  74 0B				je	ss_40
+
+ EEFA  B0 20				mov	al, FD_ERR_FDC		; bad FDC
+ EEFC  E9 ECEC R			jmp	f_exit
+
+ EEFF				ss_30:
+ EEFF  24 F0				and	al,11110000b
+ EF01  A8 10				test	al,00010000b		; recal completed
+ EF03  74 E4				je	ss_10			; yes it is like a seek
+
+ EF05				ss_40:
+ EF05  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-24
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		get_status (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	GET STATUS result from previously sent command. 		*
+				;*									*
+				;*	ENTRY:	DS = RDP segment					*
+				;*		BP= new stack pointer on error				*
+				;*									*
+				;*	EXIT:	No error:	  Normal return.			*
+				;*		Error condition:  terminate command			*
+				;*				  AL= error type			*
+				;*				  FD_Status(0-6)= FDC status result	*
+				;*									*
+				;*	MODIFIES:	RDP:FD_Status(0-6)				*
+				;*			only ES & SI preserved				*
+				;*									*
+				;************************************************************************
+ EF06				get_status:
+					clr	bx			; start index
+ EF06  33 DB		      + 	xor	bx,bx
+ EF08				gs_10:
+ EF08  53				push	bx			; save index
+ EF09  E8 EF98 R			call	FD_ByteIn		; get byte from FDC
+ EF0C  5B				pop	bx
+ EF0D  72 0D				jc	gs_30			; FDC handshake error
+
+ EF0F  88 87 0000 E			mov	FD_Status[bx], al	; store result byte
+ EF13  74 06				je	gs_20
+
+ EF15  43				inc	bx
+ EF16  83 FB 07 			cmp	bx, 7
+ EF19  72 ED				jb	gs_10
+ EF1B				gs_20:
+ EF1B  C3				ret
+ EF1C				gs_30:
+
+ EF1C  E9 ECEC R			jmp	f_exit			; AL has error type
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-25
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_IRQ interrupt					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Floppy Disk Hardware Interrupt service				*
+				;*									*
+				;*	ENTRY:	(none)							*
+				;*	EXIT:	(none)							*
+				;*									*
+				;************************************************************************
+
+				;************************************************************************
+				;*
+				;*		Set PC compatible org for H/W interrupt
+				;*
+				;************************************************************************
+
+					morg 0ef57h
+ EF57			      + 	org 0ef57h
+ EF57				FD_IRQ:
+ EF57  FB				sti				; allow higher priority IRQ's
+ EF58  1E				push	ds			; save registers used
+ EF59  50				push	ax
+
+				    set_RDP	ax
+ EF5A  B8 ---- R	      + 	mov	ax, RDP
+ EF5D  8E D8		      + 	mov	ds, ax
+ EF5F  80 0E 0000 E 80			or	FD_Seek, FD_INT_BIT	; indicate command complete
+									; make fd interrupt ready
+ EF64  B0 20				mov	al,20h
+ EF66  E6 20				out	20h, al
+									; restore registers used
+ EF68  58				pop	ax
+ EF69  1F				pop	ds
+ EF6A  CF				iret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-26
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		cmd_out (local) 					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Send one byte of FDC CoMmanD OUT				*
+				;*									*
+				;*	ENTRY:	AL = byte to output					*
+				;*		DS = RDP segment					*
+				;*		BP= new stack pointer on error				*
+				;*									*
+				;*	EXIT:	No error:	  Normal return.			*
+				;*		Error condition:  terminate command			*
+				;*				  AL= error type			*
+				;*				  FD_Status(0-6)= FDC status result.	*
+				;*									*
+				;*	MODIFIES:	RDP:FD_Status(0-6)				*
+				;*			only ES & SI preserved				*
+				;*									*
+				;************************************************************************
+ EF6B				cmd_out:
+ EF6B  E8 EF76 R			call	FD_ByteOut		; send byte to controller
+ EF6E  72 01				jc	co_10			; timeout error
+ EF70  C3				ret
+ EF71				co_10:
+ EF71  B0 80				mov	al, FD_ERR_TO
+ EF73  E9 ECEC R			jmp	f_exit			; abort
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-27
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_ByteOut (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	put command data byte to FDC					*
+				;*									*
+				;*	ENTRY:	AL= command data byte					*
+				;*									*
+				;*	EXIT:	PSW.C set:    timeout error				*
+				;*									*
+				;*	MODIFIES:   All GP registers					*
+				;*									*
+				;************************************************************************
+ EF76				FD_ByteOut:
+ EF76  8A E0				mov	ah,al			; save data byte
+ EF78  BA 03F4				mov	dx, 03F4h		; status port
+					clr	cx
+ EF7B  33 C9		      + 	xor	cx,cx
+ EF7D				bo_10:				;-------- wait for output direction
+ EF7D  EC				in	al,dx
+ EF7E  A8 40				test	al, 040h
+ EF80  74 04				je	bo_20
+ EF82  E2 F9				loop	bo_10
+ EF84				bo_err: 				; too long
+ EF84  F9				stc				; return timeout error
+ EF85  C3				ret
+ EF86				bo_20:				;-------- wait for RQM
+ EF86  33 C9				xor	cx,cx
+ EF88				bo_21:
+ EF88  EC				in	al,dx
+ EF89  A8 80				test	al, 80h
+ EF8B  75 04				jne	bo_30
+
+ EF8D  E2 F9				loop	bo_21
+ EF8F  EB F3				jmp	bo_err
+ EF91				bo_30:				;-------- put data to FDC
+ EF91  8A C4				mov	al,ah
+ EF93  B2 F5				mov	dl, 0F5h
+ EF95  EE				out	dx,al
+
+ EF96  F8				clc				; return no error
+ EF97  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-28
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_ByteIn  (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	get status data byte from FDC					*
+				;*									*
+				;*	ENTRY:	(none)							*
+				;*	EXIT:	PSW.C set:    handshake error				*
+				;*		PSW.C clear:  AL= status data byte from FDC		*
+				;*		PSW.Z set:    last status byte available from FDC.	*
+				;*									*
+				;*	MODIFIES:   All GP registers					*
+				;*									*
+				;************************************************************************
+ EF98				FD_ByteIn:
+					clr	cx
+ EF98  33 C9		      + 	xor	cx,cx
+ EF9A				bi_05:				;-------- wait for RQM
+ EF9A  BA 03F4				mov	dx,03F4h
+ EF9D  EC				in	al,dx
+ EF9E  A8 80				test	al,080h
+ EFA0  75 06				jne	bi_10
+
+ EFA2  E2 F6				loop	bi_05
+ EFA4  B0 80				mov	al, FD_ERR_TO		; return Timeout
+ EFA6				bi_err:
+ EFA6  F9				stc				; return timeout
+ EFA7  C3				ret
+ EFA8				bi_10:				;-------- check for input direction
+ EFA8  EC				in	al,dx
+ EFA9  A8 40				test	al,040h
+ EFAB  B0 20				mov	al, FD_ERR_FDC		; return bad FDC error
+ EFAD  74 F7				je	bi_err			; handshake error
+
+ EFAF  42				inc	dx		;-------- get status data byte from FDC
+ EFB0  EC				in	al, dx
+ EFB1  8A E0				mov	ah,al
+									; pause
+ EFB3  B9 0014				mov	cx,20
+ EFB6				bi_20:
+ EFB6  E2 FE				loop	bi_20
+								;-------- check for FDC read pending
+ EFB8  4A				dec	dx
+ EFB9  EC				in	al, dx
+ EFBA  86 C4				xchg	al,ah			; put data in AL
+ EFBC  F6 C4 10 			test	ah, 010h		; set PSW.Z
+
+ EFBF  F8				clc				; no error
+ EFC0  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-29
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				   page
+				;************************************************************************
+				;*									*
+				;*		PC org'd floppy disk parms				*
+				;*									*
+				;************************************************************************
+
+					morg	0efc7h
+ EFC7			      + 	org 0efc7h
+
+ EFC7  CF			fd_parms	db 0cfh 	;first two bytes are specfy bytes to NEC
+ EFC8  02					db 2		;dma mode, head load time = 1
+ EFC9  24					db 18 * 2	;two seconds worth of tic ints
+ EFCA  02					db 2		;512 bytes per sector
+ EFCB  09					db 9		;sectors per track
+ EFCC  2A					db 02ah 	;gap
+ EFCD  FF					db 0ffh 	;dtl
+ EFCE  50					db 050h 	;format gap length
+ EFCF  F6					db 0f6h 	;fill byte for formats
+ EFD0  19					db 25		;head settling time (millisecs)
+ EFD1  04					db 4		;motor start time (1/8 seconds)
+ =				flop_parms_len	equ offset $ - offset flop_parms
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-30
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		wait_rdy (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Wait for flag from interrupt routine with timeout.		*
+				;*									*
+				;*	ENTRY:	DS = RDP segment					*
+				;*		BP= new stack pointer on error				*
+				;*									*
+				;*	EXIT:	No error:	  Normal return.			*
+				;*		Error condition:  terminate command			*
+				;*				  AL= error type			*
+				;*				  FD_Status(0-6)= FDC status result.	*
+				;*									*
+				;*	MODIFIES:	RDP:FD_Status(0-6)				*
+				;*			only ES & SI preserved				*
+				;*									*
+				;************************************************************************
+ EFD2				wait_rdy:
+ EFD2  B0 08				mov	al,2*4			; wait 2 seconds
+					clr	cx
+ EFD4  33 C9		      + 	xor	cx,cx
+					even
+ EFD6				wr_10:
+ EFD6  F6 06 0000 E 80			test	FD_Seek, FD_INT_BIT	; check for interrupt done
+ EFDB  75 0B				jne	wr_20
+
+ EFDD  E2 F7				loop	wr_10
+ EFDF  FE C8				dec	al
+ EFE1  75 F3				jnz	wr_10
+
+ EFE3  B0 80				mov	al, FD_ERR_TO		; time out error
+ EFE5  E9 ECEC R			jmp	f_exit
+ EFE8				wr_20:
+ EFE8  80 26 0000 E 7F			and	FD_Seek, not FD_INT_BIT ; clear interrupt flag
+ EFED  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-31
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMFD - floppy driver
+
+				 page
+				;************************************************************************
+				;*									*
+				;*		FD_Reset  (local)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Floppy disk Controller reset					*
+				;*									*
+				;*	ENTRY:	(none)							*
+				;*	EXIT:	(none)
+				;*									*
+				;*	MODIFIES:   All GP registers					*
+				;*									*
+				;************************************************************************
+
+ EFEE				FD_Reset:
+ EFEE  FA				cli				;*no interrupts during reset
+ EFEF  8A 1E 0000 E			mov	bl, FD_Motor
+ EFF3  81 E3 000F			and	bx, +0Fh
+ EFF7  2E: 8A 87 EC74 R 		mov	al, reset_bits[bx]
+
+ EFFC  BA 03F2				mov	dx, 03F2h		; reset controler
+ EFFF  EE				out	dx, al
+
+ F000  C6 06 0000 E 00			mov	FD_Seek, 0		; and seek status
+
+ F005  B9 0014				mov	cx, 20
+ F008				fr_10:
+ F008  E2 FE				loop	fr_10
+
+ F00A  0C 04				or	al, 4			; turn off reset
+ F00C  EE				out	dx, al
+ F00D  FB				sti
+ F00E  C3				ret
+
+ F00F				code	ends
+					end
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-1
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+
+
+					page ,132
+					title GOUPIL4 PC compatible Rom I/O System
+					subttl ROMCRT - video driver
+
+				;*.
+				;************************************************************************
+				;*									*
+				;*	ROM VIDEO DRIVER						*
+				;*									*
+				;*	  DATE	  RELEASE		COMMENT 			*
+				;*	--------  -------     -------------------------------------	*
+				;*									*
+				;************************************************************************
+				;*.
+
+				;************************************************************************
+				;*									*
+				;*	VIDEO  --  Video ROM Driver					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	The video driver performs functions on the system monitor.	*
+				;*	The driver detects the kind of monitor currently active 	*
+				;*	(color or monochrome) via the equipment vector in the ROM	*
+				;*	data page.  This driver is compatible with the IBM PC video	*
+				;*	driver. 							*
+				;*									*
+				;*	Entry:	AH = function number.					*
+				;*		Other regs set according to func (see below).		*
+				;*									*
+				;*	Exit:	Return regs set per function (see below).		*
+				;*		AX destroyed, all other regs are preserved.		*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Set Video Mode							*
+				;*									*
+				;*	Set the video mode to one of the following:			*
+				;*		0   -	40x25, b/w text 				*
+				;*		1   -	40x25, color text				*
+				;*		2   -	80x25, b/w text 				*
+				;*		3   -	80x25, color text				*
+				;*		4   -	320x200, color med-res graphics 		*
+				;*		5   -	320x200, b/w med-res graphics			*
+				;*		6   -	640x200, b/w hi-res graphics			*
+				;*		7   -	80x25 monochrome (used internally)		*
+				;*	This function reinitializes the hardware, clears the screen,	*
+				;*	resets the cursor attributes, and positions all cursors to the	*
+				;*	top of their text pages.					*
+				;*									*
+				;*	Entry:	AH = 0, 						*
+				;*		AL = video mode.					*
+				;*									*
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-2
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Set Cursor Attributes						*
+				;*									*
+				;*	Set the starting and ending rasters for the hardware cursor.	*
+				;*	The start/end raster is 0..7 for color, 0..13 for monochrome.	*
+				;*	Bits 6,5 of CH also set blink and display attributes of cursor. *
+				;*	Bits 6,5 are off for normal cursor, 1,0 for cursor off: other	*
+				;*	settings cause erratic cursor blinking. 			*
+				;*									*
+				;*	Entry:	AH = 1, 						*
+				;*		CH = start cursor raster,				*
+				;*		CL = ending cursor raster.				*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Set Cursor Position						*
+				;*									*
+				;*	Set the cursor to the specified (row,column) of the specified	*
+				;*	page, where (0,0) is the upper left corner of the page.  If	*
+				;*	the specified page is the active page, the hardware cursor is	*
+				;*	positioned on the screen.					*
+				;*									*
+				;*	Entry:	AH = 2, 						*
+				;*		DH,DL = row,column,					*
+				;*		BH = page.						*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Get Cursor							*
+				;*									*
+				;*	Return the cursor position and attributes.			*
+				;*									*
+				;*	Entry:	AH = 3, 						*
+				;*		BH = page.						*
+				;*									*
+				;*	Exit:	DH,DL = row,col of cursor,				*
+				;*		CH,CL = cursor attributes.				*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Read Light Pen							*
+				;*									*
+				;*	Read light pen registers of the CRT controller chip.		*
+				;*									*
+				;*	Entry:	AH = 4. 						*
+				;*									*
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-3
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+				;*	Exit:	AH = 0 if light pen switch not active,			*
+				;*		AH = 1 if light pen registers are valid,		*
+				;*		DH,DL = char cell row,col,				*
+				;*		CH = raster line (0..199),				*
+				;*		BX = pixel in raster (0..319 or 0..639).		*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Select Active Page						*
+				;*									*
+				;*	Select the text page to be displayed.  Valid only in text	*
+				;*	modes with color adaptor.					*
+				;*									*
+				;*	Entry:	AH = 5, 						*
+				;*		AL = new page (0..7 or 0..3).				*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Scroll Up							*
+				;*									*
+				;*	Scroll a region of the active text page up by a specified	*
+				;*	number of lines.						*
+				;*									*
+				;*	Entry:	AH = 6, 						*
+				;*		CH,CL = row,col of upper left corner of region, 	*
+				;*		DH,DL = row,col of bottom right corner of region,	*
+				;*		BL = attribute used for blank lines,			*
+				;*		AL = lines to scroll, zero to blank entire region.	*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Scroll Down							*
+				;*									*
+				;*	Scroll a region of the active text page down by a specified	*
+				;*	number of lines.						*
+				;*									*
+				;*	Entry:	AH = 7, 						*
+				;*		CH,CL = row,col of upper left corner of region, 	*
+				;*		DH,DL = row,col of bottom right corner of region,	*
+				;*		BL = attribute used for blank lines,			*
+				;*		AL = lines to scroll, zero to blank entire region.	*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Read Character and Attribute					*
+				;*									*
+				;*	Read the character and attribute at the current cursor		*
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-4
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+				;*	position of the specified page. 				*
+				;*									*
+				;*	Entry:	AH = 8, 						*
+				;*		BH = text page. 					*
+				;*									*
+				;*	Exit:	AL = character, 					*
+				;*		AH = attribute (only valid in text modes).		*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Write Character and Attribute					*
+				;*									*
+				;*	Write the specified character and attribute at the current	*
+				;*	cursor position of the specified text page.			*
+				;*									*
+				;*	Entry:	AH = 9, 						*
+				;*		AL = character, 					*
+				;*		BL = attribute, 					*
+				;*		BH = text page, 					*
+				;*		CX = number of chars to write.				*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Write Character 						*
+				;*									*
+				;*	Write the specified character only at the current cursor	*
+				;*	position of the specified text page.				*
+				;*									*
+				;*	Entry:	AH = 10,						*
+				;*		AL = character, 					*
+				;*		BH = text page, 					*
+				;*		CX = number of chars to write.				*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Set Palette							*
+				;*									*
+				;*	Set the color palette.	A color is associated with the a	*
+				;*	palette ID.  For the current color card, the palette settings	*
+				;*	are very limited.						*
+				;*									*
+				;*	Entry:	AH = 11,						*
+				;*		BH = color ID,						*
+				;*		BL = color to be used with color ID.			*
+				;*									*
+				;*		For color adaptor:					*
+				;*		    text:	BH=0, BL= border color. 		*
+				;*		    320x200:	BH=0, BL= background (0..15),		*
+				;*				BH=1, BL=0->green(1),red(2),yellow(3),	*
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-5
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+				;*				      BL=1->cyan(1),magenta(2),white(3) *
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Write Pixel							*
+				;*									*
+				;*	Set the pixel to specified color.  If the msb of color is set,	*
+				;*	then the pixel is exclusive-ORed into screen, otherwise it	*
+				;*	overwrites the pre-existing pixel.				*
+				;*									*
+				;*	Entry:	AH = 12,						*
+				;*		AL = color						*
+				;*		CX = pixel in raster (0..319, 0..639),			*
+				;*		DX = raster number (0..199).				*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Read Pixel							*
+				;*									*
+				;*	Return the color of the specified pixel.			*
+				;*									*
+				;*	Entry:	AH = 13,						*
+				;*		CX = pixel in raster (0..319, 0..639),			*
+				;*		DX = raster number (0..199).				*
+				;*									*
+				;*	Exit:	AL = color.						*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	TTY Write							*
+				;*									*
+				;*	Write character at current cursor position of active page,	*
+				;*	advancing cursor.  CR,LF,BELL,BS characters are interpreted.	*
+				;*									*
+				;*	Entry:	AH = 14,						*
+				;*		AL = character, 					*
+				;*		BL = foreground color, in graphics mode.		*
+				;*									*
+				;*	Exit:	None.							*
+				;*									*
+				;*----------------------------------------------------------------------*
+				;*									*
+				;*	Get State							*
+				;*									*
+				;*	Return the current video state. 				*
+				;*									*
+				;*	Entry:	AH = 15.						*
+				;*									*
+				;*	Exit:	AL = current video mode (0..7), 			*
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-6
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+				;*		AH = number of columns, 				*
+				;*		BH = active display page.				*
+				;*									*
+				;************************************************************************
+
+
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-7
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	Definitions							*
+				;*									*
+				;************************************************************************
+
+ = 0010 			VIDEO_INT	equ	10h		;video driver interrupt number
+ = 001D 			PARMS_INT	equ	1Dh		;video parameter interrupt number
+ = 001F 			CHSET_INT	equ	1Fh		;upper ascii character set
+
+ = 0040 			TIMER		equ	40h		;8253 timer port
+ = 0061 			PORTB		equ	61h		;timer control port
+
+ = 001F 			PAL_BG_BITS	equ	00011111b	;background bits in color reg
+ = 0020 			PAL_SEL_BIT	equ	00100000b	;palette selection bit
+
+
+ = 0500 			BELLFREQ	equ	500h		;frequency for bell tone
+ = 0002 			BELLCNT 	equ	2		;bell duration
+
+
+ = 0007 			BELL		equ	7		;ascii bell
+ = 0008 			BS		equ	8		;back space
+ = 000A 			LF		equ	10		;line feed
+ = 000D 			CR		equ	13		;carriage return
+
+
+				frameb	struc				;stack frame
+ 0000  ??			RAL	db	?
+ 0001  ??			RAH	db	?
+ 0002  ??			RBL	db	?
+ 0003  ??			RBH	db	?
+ 0004  ??			RCL	db	?
+ 0005  ??			RCH	db	?
+ 0006  ??			RDL	db	?
+ 0007  ??			RDH	db	?
+ 0008				frameb	ends
+
+				framew	struc
+ 0000  ????			RAX	dw	?
+ 0002  ????			RBX	dw	?
+ 0004  ????			RCX	dw	?
+ 0006  ????			RDX	dw	?
+ 0008  ????			RSI	dw	?
+ 000A  ????			RDI	dw	?
+ 000C  ????			RBP	dw	?
+ 000E  ????			RES	dw	?
+ 0010  ????			RDS	dw	?
+ 0012  ????			RIP	dw	?
+ 0014  ????			RCS	dw	?
+ 0016  ????			FLGS	dw	?
+ 0018				framew	ends
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-8
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+
+				modprms struc
+ 0000  ????				dw	?			;6845 init values
+ 0002  ????				dw	?			;number of columns
+ 0004  ????				dw	?			;regen length
+ 0006  ??				db	?			;control reg value
+ 0007				modprms ends
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-9
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	Publics and Externals						*
+				;*									*
+				;************************************************************************
+			     C	include rdp.ext
+			     C	;-------------------- ROM Data Page definitions
+			     C
+			     C	set_RDP macro reg
+			     C	Dseg	RDP using reg
+			     C	endm
+			     C
+ 0000			     C	RDP	segment at 40h			; ROM Data Page
+			     C
+			     C	; system configuration
+			     C
+			     C	extrn	ser_base	: word		; base port addrs for serial comm
+			     C	extrn	par_base	: word		; base port addrs for parallel
+			     C
+			     C	extrn	equip_vect	: word		; system equipment vector
+			     C	extrn	top_memory	: word		; memory size, in 1K increments
+			     C
+			     C	; keyboard data
+			     C
+			     C	extrn	kb_state1	: byte		; keyboard current state
+			     C	extrn	kb_state2	: byte		; more keyboard state
+			     C	extrn	kb_keycode	: byte		; kb input via alted keypad
+			     C
+			     C	extrn	kb_head 	: word		; head ptr of keyboard buffer
+			     C	extrn	kb_tail 	: word		; tail of keyboard buffer
+			     C	extrn	kb_buffer	: word		; keyboard buffer area
+			     C	extrn	kb_buff_last	: byte		; end of keyboard buffer
+			     C
+			     C	; diskette data
+			     C
+			     C	extrn	fd_seek 	: byte		; drive recalibration flags
+			     C	extrn	fd_motor	: byte		; motor status
+			     C	extrn	fd_timeout	: byte		; motor off timeout count
+			     C
+			     C	extrn	fd_result	: byte		; result code for previous operation
+			     C	extrn	fd_status	: byte		; status bytes from floppy controller
+			     C
+			     C	; video display data
+			     C
+			     C	extrn	crt_mode	: byte		; current display mode
+			     C	extrn	crt_cols	: word		; curr screen columns
+			     C	extrn	crt_regen_leng	: word		; length of regen buffer, in bytes
+			     C	extrn	crt_regen_base	: word		; base of regen buffer
+			     C
+			     C	extrn	crt_curs_pos	: word		; cursor locations for text pages
+			     C	extrn	crt_curs_attrs	: word		; cursor attributes
+			     C	extrn	crt_curr_page	: byte		; current display page
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-10
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+			     C
+			     C	extrn	crt_iobase	: word		; crt controller port addr
+			     C	extrn	crt_mode_reg	: byte		; copy of curr mode register setting
+			     C	extrn	crt_palette	: byte		; copy of curr palette reg setting
+			     C
+			     C	; tod timer data
+			     C
+			     C	extrn	tmr_counter	: dword 	; timer tick counter
+			     C	extrn	tmr_overflow	: byte		; 24 hour overflow
+			     C
+			     C	; system data area
+			     C
+			     C	extrn	break_flag	: byte		; bit 7 set on break key event
+			     C	extrn	reset_flag	: word		; set to 4147h on warm boot
+			     C
+			     C	; hard disk area
+			     C
+			     C	extrn	hd_status	: byte
+			     C	extrn	n_drives	: byte
+			     C	extrn	hd_flags	: byte
+			     C	extrn	hd_cbits	: byte
+			     C
+			     C	; printer/serial data
+			     C
+			     C	extrn	par_timeout	: byte		; timeout for parallel ports
+			     C	extrn	ser_timeout	: byte		; timeouts for rs232 ports
+			     C
+			     C	; auxilary keyboard data area
+			     C
+			     C	extrn	kb_buff_start	: word		; ptr to start of kb buffer
+			     C	extrn	kb_buff_end	: word		; ptr to end of kb buffer
+			     C
+ 0000			     C	RDP ends
+			     C	include macros.inc
+			     C
+			     C	morg	macro	 arg1  ;overlap detection macro
+			     C		if1
+			     C		if $ gt arg1
+			     C		%out morg arg1 overlapping something!!!
+			     C		endif
+			     C		endif
+			     C		org arg1
+			     C		endm
+			     C
+			     C	link	macro	arg1,arg2	;set and print binlink info
+			     C		if1
+			     C		.radix	16
+			     C		outmsg	cut,arg1,%(arg2)
+			     C		outmsg	binlink,arg1,%(arg2-0c000h)
+			     C		.radix	10
+			     C		endif
+			     C		org	arg2
+			     C		endm
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-11
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+			     C
+			     C	outmsg	macro	arg1,arg2,arg3
+			     C		%out arg1 arg2 to arg3
+			     C		endm
+			     C
+
+				public	video_parms, video_entry, Dev_Init
+
+
+ = FA6E 			chset		equ 0fa6eh		;PC compatible org'ed chrset
+ = 0000 			chset_ext	equ 00000h		;PC compatible org'ed chrset_ext
+ = F000 			CHSET_SEG	equ 0f000h		;upper ascii character set segment
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-12
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	Macros								*
+				;*									*
+				;************************************************************************
+
+				;  JGRP  --
+				;	Take branch if in graphics mode.
+				;
+				;	Entry:	LABEL= name of label to branch to.
+				;
+				;	Exit:	None.
+
+				JGRP	macro	LABEL
+					local	@1
+
+					cmp	crt_mode,4
+					jb	@1
+					cmp	crt_mode,6
+					jbe	LABEL
+				@1:
+				endm
+
+
+
+				;  JNGRP  --
+				;	Take branch if not in graphics mode.
+				;
+				;	Entry:	LABEL= name of label to branch to.
+				;
+				;	Exit:	None.
+
+				JNGRP	macro	LABEL
+					cmp	crt_mode,4
+					jb	LABEL
+					cmp	crt_mode,6
+					ja	LABEL
+				endm
+
+
+
+				; CRTOUT  --
+				;	A pair of the 6845 CRT controller registers are set.
+				;
+				;	Entry:	REG= number of reg pair to be set,
+				;		CX= values of registers.
+				;
+				;	Exit:	DX and AL are destroyed.
+
+				CRTOUT	macro	REG
+					mov	dx,crt_iobase		;get port address of 6845
+					mov	al,REG			;select first reg to be set
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-13
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					out	dx,al
+					inc	dx
+					mov	al,ch			;get first value
+					out	dx,al			;output it to register
+					dec	dx
+					mov	al,REG+1		;second register to be set
+					out	dx,al
+					inc	dx
+					mov	al,cl			;get second value
+					out	dx,al			;output it to register
+				endm
+
+
+
+				; CURSINX  --
+				;	Get index into cursor table.
+				;
+				;	Entry:	PAGE= text page.
+				;
+				;	Exit:	BX= index into cursor table.
+
+				CURSINX macro	PAGE
+
+				ifdif	<PAGE>,<BL>
+					mov	bl,PAGE
+				endif
+					xor	bh,bh
+					shl	bx,1
+				endm
+
+
+
+				; GETCURS  --
+				;	Get the current cursor position.
+				;
+				;	Entry:	PAGE= text page.
+				;
+				;	Exit:	DX= cursor pos (row,col).
+				;		BX= index into cursor table.
+
+				GETCURS macro	PAGE
+				ifb	<PAGE>
+					mov	dx,crt_curs_pos[0]
+				else
+					CURSINX <PAGE>			;get cursor index
+					mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+				endif
+				endm
+
+
+
+				; TEXTOFF  --
+				;	Calculate screen offset of character cell in text modes.
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-14
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+				;
+				;	Entry:	DX= row,col
+				;
+				;	Exit:	AX= address within screen ram of char cell.
+				;		DX is destroyed.
+
+				TEXTOFF macro
+					xor	ax,ax			;al = row, dx = col
+					xchg	al,dh
+					mul	byte ptr crt_cols	;char cell in screen
+					add	ax,dx
+					shl	ax,1			;convert to byte offset
+				endm
+
+
+				;  GRPOFF  --
+				;	Calculate screen offset to character cell in graphics mode.
+				;
+				;	Entry:	DX= row,col.
+				;
+				;	Exit:	AX= offset of first byte of character.
+				;		DX is destroyed.
+
+				GRPOFF	macro
+					local	@1
+
+					mov	al,160			;ax gets row * (8*80)/2
+					mul	dh
+					shl	ax,1
+					xor	dh,dh			;dx = column
+
+					cmp	crt_mode,6		;check if hires
+					je	@1
+					shl	dx,1			;med res: char width is a word
+				@1:	add	ax,dx			;add horiz offset to raster
+
+				endm
+
+
+
+
+
+				;  SCRPTR  --
+				;	Form a pointer to the char cell in screen ram at the cursor.
+				;
+				;	Entry:	DX= cursor position.
+				;		PAGE= text page.
+				;
+				;	Exit:	ES:DI= pointer to char cell.
+				;		AX= screen segment,
+				;		BX,DX are destroyed.
+
+				SCRPTR	macro	PAGE
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-15
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					TEXTOFF 			;get screen offset
+					mov	di,ax			;DI gets pointer
+					mov	al,PAGE 		;recover page
+					cbw
+					mul	crt_regen_leng		;calc page offset
+					add	di,ax			;add offset into address
+					SCRSEG				;ax gets screen segment
+					mov	es,ax			;es:di gets ptr to char cell
+				endm
+
+
+
+				;  SCRSEG  --
+				;	Get the screen segment address in the specified register.
+				;
+				;	Entry:	None.
+				;
+				;	Exit:	AX set to screen segment.
+
+				SCRSEG	macro
+					local	@1
+					mov	ax,0B800h		;assume color
+					cmp	crt_mode,7		;check if monochrome
+					jne	@1
+					mov	ax,0B000h		;set for monochrome
+				@1:
+				endm
+
+
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-16
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	Video Parameter Tables						*
+				;*									*
+				;************************************************************************
+
+				Cgroup	group	code
+ 0000				code	segment public
+					assume	cs:Code, ds:nothing, es:nothing
+
+				    link	romcrt,0f030h
+ F030			      + 	org	0f030h
+
+
+				;************************************************************************
+				;*
+				;*	initialization header (must be first thing in module)
+				;*
+				;************************************************************************
+
+ F030				crt_hdr:				;call here to initialize this driver
+ F030  E8 F96A R			call	Dev_Init
+ F033  C3				ret
+
+				;************************************************************************
+				;*									*
+				;*	PC compatible org'd video dispatch table			*
+				;*									*
+				;************************************************************************
+
+					morg	0f045h
+ F045			      + 	org 0f045h
+
+ F045  F11C R			dsptab	dw	set_mode		;video dispatch table
+ F047  F238 R				dw	set_cursor
+ F049  F250 R				dw	pos_cursor
+ F04B  F28A R				dw	get_cursor
+ F04D  F948 R				dw	read_lpen
+ F04F  F29E R				dw	set_page
+ F051  F2E9 R				dw	scroll_up
+ F053  F347 R				dw	scroll_down
+ F055  F554 R				dw	read_char_atr
+ F057  F59D R				dw	write_char_atr
+ F059  F5EA R				dw	write_char
+ F05B  F1F8 R				dw	set_palette
+ F05D  F8E2 R				dw	set_pixel
+ F05F  F903 R				dw	get_pixel
+ F061  F7F5 R				dw	write_tty
+ F063  F227 R				dw	get_state
+
+ = 0010 			NBFUNC	= ($ - dsptab)/2
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-17
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	Video Dispatch							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:nothing, es:nothing
+
+					morg	0f065h
+ F065			      + 	org 0f065h
+
+ F065				VIDEO_ENTRY:
+
+ F065  FB				sti				;interrupts okay
+ F066  FC				cld
+
+ F067  1E				push	ds			;save caller's registers
+ F068  06				push	es			;..push order to match frame struc
+ F069  55				push	bp
+ F06A  57				push	di
+ F06B  56				push	si
+ F06C  52				push	dx
+ F06D  51				push	cx
+ F06E  53				push	bx
+ F06F  50				push	ax
+
+ F070  8B EC				mov	bp,sp			;set up stack frame
+
+ F072  BE ---- R			mov	si,seg RDP		;get rom data page
+ F075  8E DE				mov	ds,si
+					assume	ds:RDP
+
+ F077  80 FC 10 			cmp	ah,NBFUNC		;range check on function
+ F07A  73 0C				jae	video_ret
+
+ F07C  86 E0				xchg	ah,al			;index into dispatch table
+ F07E  98				cbw
+ F07F  D1 E0				shl	ax,1
+ F081  8B F0				mov	si,ax
+ F083  2E: FF 94 F045 R 		call	dsptab[si]		;dispatch to function
+
+ F088				video_ret:
+ F088  58				pop	ax			;restore regs/return values
+ F089  5B				pop	bx
+ F08A  59				pop	cx
+ F08B  5A				pop	dx
+ F08C  5E				pop	si
+ F08D  5F				pop	di
+ F08E  5D				pop	bp
+ F08F  07				pop	es
+ F090  1F				pop	ds
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-18
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F091  CF				iret				;return to caller
+
+					morg	0f0A4h
+ F0A4			      + 	org 0f0A4h
+
+ F0A4				video_parms	label byte		;init values for 6845
+
+ F0A4  38 28 2D 0A 1F			db	38h,28h,2dh,0ah,1fh	;40x25 text
+ F0A9  06 19 1C 02 07 06		db	6,19h,1ch,2,7,6,7
+       07
+ F0B0  00 00 00 00			db	0,0,0,0
+
+ F0B4  71 50 5A 0A 1F			db	71h,50h,5ah,0ah,1fh	;80x25 text
+ F0B9  06 19 1C 02 07 06		db	6,19h,1ch,2,7,6,7
+       07
+ F0C0  00 00 00 00			db	0,0,0,0
+
+ F0C4  38 28 2D 0A 7F			db	38h,28h,2dh,0ah,7fh	;graphics modes
+ F0C9  06 64 70 02 01 06		db	6,64h,70h,2,1,6,7
+       07
+ F0D0  00 00 00 00			db	0,0,0,0
+
+ F0D4  61 50 52 0F 19			db	61h,50h,52h,0fh,19h	;monochrome adaptor
+ F0D9  06 19 19 02 0D 0B		db	6,19h,19h,2,0dh,0bh,0ch
+       0C
+ F0E0  00 00 00 00			db	0,0,0,0
+
+
+
+ F0E4				parmtab label	word
+ F0E4  0000				modprms < 0,40, 2048,2Ch>	;40x25, b/w
+ F0E6  0028
+ F0E8  0800
+ F0EA  2C
+
+ F0EB  0000				modprms < 0,40, 2048,28h>	;40x25, color
+ F0ED  0028
+ F0EF  0800
+ F0F1  28
+
+ F0F2  0010				modprms <16,80, 4096,2Dh>	;80x25, b/w
+ F0F4  0050
+ F0F6  1000
+ F0F8  2D
+
+ F0F9  0010				modprms <16,80, 4096,29h>	;80x25, color
+ F0FB  0050
+ F0FD  1000
+ F0FF  29
+
+ F100  0020				modprms <32,40,16384,2Ah>	;320x200, color
+ F102  0028
+ F104  4000
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-19
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F106  2A
+
+ F107  0020				modprms <32,40,16384,2Eh>	;320x200, b/w
+ F109  0028
+ F10B  4000
+ F10D  2E
+
+ F10E  0020				modprms <32,80,16384,1Eh>	;640x200, b/w
+ F110  0050
+ F112  4000
+ F114  1E
+
+ F115  0030				modprms <48,80,16384,29h>	;80x25, monochrome (BUG IBM?)
+ F117  0050
+ F119  4000
+ F11B  29
+
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-20
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	SET_MODE  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F11C				SET_MODE:
+
+ F11C  8A 46 00 			mov	al,[bp].RAL		;restore AL
+ F11F  24 07				and	al,7			;mask insignificant bits of mode
+ F121  8A 26 0000 E			mov	ah,byte ptr equip_vect	;check equip vector for color adaptor
+ F125  80 E4 30 			and	ah,30h
+ F128  80 FC 30 			cmp	ah,30h
+ F12B  75 02				jne	setmod1
+ F12D  B0 07				mov	al,7			;set mode for monochrome adaptor
+
+					;init video params in rom data page
+ F12F				setmod1:
+ F12F  A2 0000 E			mov	crt_mode,al		;save new mode
+
+ F132  B4 07				mov	ah,size modprms 	;form index into parms tables
+ F134  F6 E4				mul	ah
+ F136  05 F0E4 R			add	ax,offset Code:parmtab	;address of parm table for mode
+ F139  8B F0				mov	si,ax
+
+ F13B  2E: AD				lods	cs:word ptr[si] 	;get offset into video params
+ F13D  50				push	ax			;..save it on stack
+
+ F13E  2E: AD				lods	cs:word ptr[si] 	;number of columns
+ F140  A3 0000 E			mov	crt_cols,ax
+
+ F143  2E: AD				lods	cs:word ptr[si] 	;regen buffer length
+ F145  A3 0000 E			mov	crt_regen_leng,ax
+
+ F148  2E: AC				lods	cs:byte ptr[si] 	;mode reg setting
+ F14A  A2 0000 E			mov	crt_mode_reg,al
+
+ F14D  8C D8				mov	ax,ds			;es gets data page
+ F14F  8E C0				mov	es,ax
+					assume	es:RDP
+
+ F151  BF 0000 E			mov	di,offset crt_curs_pos	;init cursors for all pages
+ F154  B9 0008				mov	cx,8
+ F157  33 C0				xor	ax,ax
+ F159  F3/ AB				rep	stosw
+ F15B  A2 0000 E			mov	crt_curr_page,al	;init active page
+ F15E  A3 0000 E			mov	crt_regen_base,ax	;init regen buffer offset
+
+					;disable video output
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-21
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F161  BA 03DF				mov	dx,3dfh 		;put 8Mhz HW in known state (mono)
+ F164  EE				out	dx,al			;change 8Mhz HW from color to mono
+
+ F165  80 3E 0000 E 07			cmp	crt_mode,7		;check if monochrome
+ F16A  75 08				jne	setmod2
+
+ F16C  BA 03B4				mov	dx,3B4h 		;set for monochrome hsp
+ F16F  B0 01				mov	al,1			;disable mono
+ F171  EB 0C 90 			jmp	setmod2a
+
+ F174				setmod2:
+ F174  BA 03BF				mov	dx,3bfh
+ F177  B0 01				mov	al,1
+ F179  EE				out	dx,al			;change 8Mhz HW from mono to color
+
+ F17A  BA 03D4				mov	dx,3D4h 		;set for color adaptor
+ F17D  FE C8				dec	al			;disable for color
+ F17F				setmod2a:
+ F17F  89 16 0000 E			mov	crt_iobase,dx		;disable video
+ F183  83 C2 04 			add	dx,4			;control register port
+ F186  EE				out	dx,al
+
+					;set 6845 registers
+
+ F187  8B 16 0000 E			mov	dx,crt_iobase		;get port address of 6845
+
+ F18B  33 C0				xor	ax,ax			;get video params pointer
+ F18D  8E D8				mov	ds,ax			;from int vector table
+ F18F  C5 36 0074			lds	si,ds:dword ptr[4*PARMS_INT]
+					assume	ds:nothing
+ F193  58				pop	ax			;add in offset to values for mode
+ F194  03 F0				add	si,ax
+
+ F196  B4 00				mov	ah,0			;ah = curr crt register
+ F198				setmod3:
+ F198  8A C4				mov	al,ah			;select crt register
+ F19A  EE				out	dx,al
+ F19B  42				inc	dx
+ F19C  AC				lodsb				;get next value
+ F19D  EE				out	dx,al			;set register
+ F19E  4A				dec	dx
+ F19F  FE C4				inc	ah			;next register
+ F1A1  80 FC 0F 			cmp	ah,15			;check if done
+ F1A4  76 F2				jbe	setmod3
+
+ F1A6  8B 44 FA 			mov	ax,[si-6]		;get cursor attrs
+ F1A9  86 E0				xchg	ah,al
+ F1AB  26: A3 0000 E			mov	es:crt_curs_attrs,ax	;and save them
+
+ F1AF  8C C0				mov	ax,es			;restore ds
+ F1B1  8E D8				mov	ds,ax
+					assume	ds:RDP,es:nothing
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-22
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					;blank screen
+
+ F1B3  8E C0				mov	es,ax			;es:di = addr of screen memory
+ F1B5  33 FF				xor	di,di
+
+ F1B7  BA B000				mov	dx,0B000h		;base addr of screen ram for mono
+ F1BA  B8 0720				mov	ax,720h 		;blank char with std attrs
+ F1BD  B9 0800				mov	cx,2048 		;words of monochrome screen ram
+ F1C0  80 3E 0000 E 07			cmp	crt_mode,7		;check if monochrome
+ F1C5  74 0F				je	setmod4
+
+ F1C7  BA B800				mov	dx,0B800h		;base addr of screen ram for color
+ F1CA  B9 2000				mov	cx,8192 		;words of color screen ram
+ F1CD  80 3E 0000 E 04			cmp	crt_mode,4		;check if text mode
+ F1D2  72 02				jb	setmod4
+ F1D4  33 C0				xor	ax,ax			;graphics: fill screen with black
+
+ F1D6				setmod4:
+ F1D6  33 FF				xor	di,di			;es:di = ptr to screen ram
+ F1D8  8E C2				mov	es,dx
+ F1DA  F3/ AB				rep	stosw			;fill screen
+
+					;enable video output
+
+ F1DC  8B 16 0000 E			mov	dx,crt_iobase		;port address of video
+ F1E0  83 C2 04 			add	dx,4			;control register
+ F1E3  A0 0000 E			mov	al,crt_mode_reg 	;get new value of control reg
+ F1E6  EE				out	dx,al			;set control reg
+
+					;init overscan register
+
+ F1E7  B0 30				mov	al,30h			;standard setting
+ F1E9  80 3E 0000 E 06			cmp	crt_mode,6		;check if hi-res
+ F1EE  75 02				jne	setmod5
+ F1F0  B0 3F				mov	al,3Fh			;use this for hi-res
+
+ F1F2				setmod5:
+ F1F2  42				inc	dx			;overscan reg port
+ F1F3  EE				out	dx,al			;set the reg
+ F1F4  A2 0000 E			mov	crt_palette,al		;save value
+
+ F1F7  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-23
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	SET_PALETTE  -- 						*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F1F8				SET_PALETTE:
+
+ F1F8  80 3E 0000 E 07			cmp	crt_mode,7		;check if color adaptor
+ F1FD  73 27				jae	pal_ret 		;if so, do nothing
+
+ F1FF  8B 16 0000 E			mov	dx,crt_iobase		;get port addr of color reg
+ F203  83 C2 05 			add	dx,5
+ F206  A0 0000 E			mov	al,crt_palette		;recover the color reg image
+
+ F209  80 FF 01 			cmp	bh,1			;palette id
+ F20C  74 0B				je	pal_1			;id = 1
+ F20E  77 16				ja	pal_ret 		;invalid palette: do nothing
+
+					; set background color
+ F210				pal_0:
+ F210  24 E0				and	al,not PAL_BG_BITS	;mask off old background
+ F212  80 E3 1F 			and	bl,PAL_BG_BITS		;fold in new bg color bits
+ F215  0A C3				or	al,bl
+ F217  EB 09				jmp	short pal_set
+
+					; select med-res color pallete
+ F219				pal_1:
+ F219  24 DF				and	al,not PAL_SEL_BIT	;mask off old palette selection
+ F21B  F6 C3 01 			test	bl,1			;check new setting
+ F21E  74 02				jz	pal_set 		;select palette 0
+ F220  0C 20				or	al,PAL_SEL_BIT		;select palette 1
+
+					; set new value for color reg
+ F222				pal_set:
+ F222  A2 0000 E			mov	crt_palette,al		;keep copy of curr setting
+ F225  EE				out	dx,al			;set hardware register
+
+ F226				pal_ret:
+ F226  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-24
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	GET_STATE  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F227				GET_STATE:
+
+ F227  A0 0000 E			mov	al,crt_mode		;get curr video mode
+ F22A  8A 26 0000 E			mov	ah,byte ptr crt_cols	;get curr screen width
+ F22E  89 46 00 			mov	[bp].RAX,ax		;return them in ax
+ F231  A0 0000 E			mov	al,crt_curr_page	;get active page
+ F234  88 46 03 			mov	[bp].RBH,al		;return it in bh
+
+ F237  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-25
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	SET_CURSOR  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F238				SET_CURSOR:
+
+ F238  89 0E 0000 E			mov	crt_curs_attrs,cx	;save cursor attributes
+					CRTOUT	10			;set h/w cursor attrs
+ F23C  8B 16 0000 E	      + 	mov	dx,crt_iobase		;get port address of 6845
+ F240  B0 0A		      + 	mov	al,10			;select first reg to be set
+ F242  EE		      + 	out	dx,al
+ F243  42		      + 	inc	dx
+ F244  8A C5		      + 	mov	al,ch			;get first value
+ F246  EE		      + 	out	dx,al			;output it to register
+ F247  4A		      + 	dec	dx
+ F248  B0 0B		      + 	mov	al,10+1 	;second register to be set
+ F24A  EE		      + 	out	dx,al
+ F24B  42		      + 	inc	dx
+ F24C  8A C1		      + 	mov	al,cl			;get second value
+ F24E  EE		      + 	out	dx,al			;output it to register
+ F24F  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-26
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	POS_CURSOR  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F250				POS_CURSOR:
+
+ F250  8A C7				mov	al,bh			;save page
+					CURSINX bh			;get index into cursor table
+ F252  8A DF		      + 	mov	bl,bh
+ F254  32 FF		      + 	xor	bh,bh
+ F256  D1 E3		      + 	shl	bx,1
+ F258  89 97 0000 E			mov	crt_curs_pos[bx],dx	;update cursor position
+
+ F25C  3A 06 0000 E			cmp	al,crt_curr_page	;check if active page
+ F260  75 27				jne	poscursx		;done if not
+
+					;position hardware cursor
+ F262				putcurs:
+					TEXTOFF 			;ax gets offset into page
+ F262  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F264  86 C6		      + 	xchg	al,dh
+ F266  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F26A  03 C2		      + 	add	ax,dx
+ F26C  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F26E  03 06 0000 E			add	ax,crt_regen_base	;bias by crt start address
+ F272  D1 E8				shr	ax,1			;convert to word count
+ F274  8B C8				mov	cx,ax
+					CRTOUT	14			;write to h/w cursor regs
+ F276  8B 16 0000 E	      + 	mov	dx,crt_iobase		;get port address of 6845
+ F27A  B0 0E		      + 	mov	al,14			;select first reg to be set
+ F27C  EE		      + 	out	dx,al
+ F27D  42		      + 	inc	dx
+ F27E  8A C5		      + 	mov	al,ch			;get first value
+ F280  EE		      + 	out	dx,al			;output it to register
+ F281  4A		      + 	dec	dx
+ F282  B0 0F		      + 	mov	al,14+1 	;second register to be set
+ F284  EE		      + 	out	dx,al
+ F285  42		      + 	inc	dx
+ F286  8A C1		      + 	mov	al,cl			;get second value
+ F288  EE		      + 	out	dx,al			;output it to register
+
+ F289				poscursx:
+ F289  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-27
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	GET_CURSOR  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F28A				GET_CURSOR:
+
+					GETCURS bh			;get the cursor position
+ F28A  8A DF		      + 	mov	bl,bh
+ F28C  32 FF		      + 	xor	bh,bh
+ F28E  D1 E3		      + 	shl	bx,1
+ F290  8B 97 0000 E	      + 	mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+ F294  89 56 06 			mov	[bp].RDX,dx		;return it in DX
+ F297  A1 0000 E			mov	ax,crt_curs_attrs	;get the h/w cursor attributes
+ F29A  89 46 04 			mov	[bp].RCX,ax		;return them in CX
+ F29D  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-28
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	SET_PAGE  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F29E				SET_PAGE:
+
+ F29E  80 3E 0000 E 03			cmp	crt_mode,3		;only valid in text modes 0..3
+ F2A3  77 12				ja	setpagx
+
+ F2A5  8A 46 00 			mov	al,[bp].RAL		;restore al
+ F2A8  3C 03				cmp	al,3			;pages 0..3 okay
+ F2AA  76 0C				jbe	setpage
+ F2AC  80 3E 0000 E 01			cmp	crt_mode,1		;if modes 0,1, pages 0..7 okay
+ F2B1  77 04				ja	setpagx
+ F2B3  3C 07				cmp	al,7
+ F2B5  76 01				jbe	setpage
+
+ F2B7				setpagx:
+ F2B7  C3				ret
+
+
+ F2B8				setpage:
+ F2B8  A2 0000 E			mov	crt_curr_page,al	;save new active page
+ F2BB  98				cbw				;calc new start address
+ F2BC  F7 26 0000 E			mul	crt_regen_leng
+ F2C0  A3 0000 E			mov	crt_regen_base,ax	;save new start address
+
+ F2C3  8B C8				mov	cx,ax			;update start addr in h/w
+ F2C5  D1 E9				shr	cx,1			;convert to char count
+					CRTOUT	12
+ F2C7  8B 16 0000 E	      + 	mov	dx,crt_iobase		;get port address of 6845
+ F2CB  B0 0C		      + 	mov	al,12			;select first reg to be set
+ F2CD  EE		      + 	out	dx,al
+ F2CE  42		      + 	inc	dx
+ F2CF  8A C5		      + 	mov	al,ch			;get first value
+ F2D1  EE		      + 	out	dx,al			;output it to register
+ F2D2  4A		      + 	dec	dx
+ F2D3  B0 0D		      + 	mov	al,12+1 	;second register to be set
+ F2D5  EE		      + 	out	dx,al
+ F2D6  42		      + 	inc	dx
+ F2D7  8A C1		      + 	mov	al,cl			;get second value
+ F2D9  EE		      + 	out	dx,al			;output it to register
+
+					GETCURS crt_curr_page		;dx gets cursor for new page
+ F2DA  8A 1E 0000 E	      + 	mov	bl,crt_curr_page
+ F2DE  32 FF		      + 	xor	bh,bh
+ F2E0  D1 E3		      + 	shl	bx,1
+ F2E2  8B 97 0000 E	      + 	mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-29
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F2E6  E9 F262 R			jmp	putcurs 		;set hardware cursor
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-30
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	SCROLL	--							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F2E9				SCROLL:
+
+
+					;setup to scroll region up
+
+ F2E9				Scroll_up:
+ F2E9  8A 46 00 			mov	al,[bp].RAL		;restore row count
+
+ F2EC				scrollup:				;entry for tty scroll
+					JNGRP	text_up 		;graphics or text scroll
+ F2EC  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F2F1  72 0A		      + 	jb	text_up
+ F2F3  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F2F8  77 03		      + 	ja	text_up
+ F2FA  E9 F40E R			jmp	gr_up
+
+ F2FD				text_up:
+ F2FD  53				push	bx			;save blanking attrs
+ F2FE  3C 00				cmp	al,0			;check to blank region
+ F300  75 03				jnz	textup1
+ F302  E9 F3A7 R			jmp	text_blank
+
+ F305				textup1:
+ F305  8A D8				mov	bl,al			;rows to blank
+ F307  8A FE				mov	bh,dh			;calc rows to copy
+ F309  2A FD				sub	bh,ch
+ F30B  2A FB				sub	bh,bl
+ F30D  FE C7				inc	bh
+
+ F30F  87 CA				xchg	cx,dx			;calc row width
+ F311  2A CA				sub	cl,dl
+ F313  32 ED				xor	ch,ch
+ F315  41				inc	cx
+
+ F316  52				push	dx			;save top of region
+					TEXTOFF 			;calc dest screen pointer
+ F317  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F319  86 C6		      + 	xchg	al,dh
+ F31B  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F31F  03 C2		      + 	add	ax,dx
+ F321  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F323  03 06 0000 E			add	ax,crt_regen_base	;add in page offset
+ F327  8B F8				mov	di,ax
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-31
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F329  5A				pop	dx			;restore to of region
+ F32A  02 F3				add	dh,bl			;calc source screen pointer
+					TEXTOFF
+ F32C  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F32E  86 C6		      + 	xchg	al,dh
+ F330  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F334  03 C2		      + 	add	ax,dx
+ F336  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F338  03 06 0000 E			add	ax,crt_regen_base	;add in page offset
+ F33C  8B F0				mov	si,ax
+
+ F33E  8B 16 0000 E			mov	dx,crt_cols		;get row delta
+ F342  D1 E2				shl	dx,1			;convert to words
+ F344  E9 F3DD R			jmp	text_scroll
+
+
+					;setup to scroll region down
+
+ F347				Scroll_down:
+ F347  8A 46 00 			mov	al,[bp].RAL		;restore row count
+					JNGRP	text_down		;graphics or text scroll
+ F34A  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F34F  72 0A		      + 	jb	text_down
+ F351  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F356  77 03		      + 	ja	text_down
+ F358  E9 F45A R			jmp	gr_down
+
+ F35B				text_down:
+
+ F35B  53				push	bx			;save blanking attrs
+ F35C  3C 00				cmp	al,0			;check to blank region
+ F35E  74 47				jz	text_blank
+
+ F360  8A D8				mov	bl,al			;rows to blank
+ F362  8A FE				mov	bh,dh			;calc rows to copy
+ F364  2A FD				sub	bh,ch
+ F366  2A FB				sub	bh,bl
+ F368  FE C7				inc	bh
+
+ F36A  8A C2				mov	al,dl			;calc row width
+ F36C  2A C1				sub	al,cl
+ F36E  98				cbw
+ F36F  40				inc	ax
+ F370  8A D1				mov	dl,cl			;left edge of region
+ F372  8B C8				mov	cx,ax
+
+ F374  52				push	dx			;save bottom of region
+					TEXTOFF 			;calc dest screen pointer
+ F375  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F377  86 C6		      + 	xchg	al,dh
+ F379  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F37D  03 C2		      + 	add	ax,dx
+ F37F  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-32
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F381  03 06 0000 E			add	ax,crt_regen_base	;add in page offset
+ F385  8B F8				mov	di,ax
+
+ F387  5A				pop	dx			;restore to of region
+ F388  2A F3				sub	dh,bl			;calc source screen pointer
+					TEXTOFF
+ F38A  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F38C  86 C6		      + 	xchg	al,dh
+ F38E  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F392  03 C2		      + 	add	ax,dx
+ F394  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F396  03 06 0000 E			add	ax,crt_regen_base	;add in page offset
+ F39A  8B F0				mov	si,ax
+
+ F39C  8B 16 0000 E			mov	dx,crt_cols		;get row delta
+ F3A0  D1 E2				shl	dx,1			;convert to words
+ F3A2  F7 DA				neg	dx
+
+ F3A4  EB 37 90 			jmp	text_scroll		;goto common routines
+
+
+					;setup to blank entire text region
+
+ F3A7				text_blank:
+ F3A7  8A DE				mov	bl,dh			;calc num of rows to blank
+ F3A9  2A DD				sub	bl,ch
+ F3AB  FE C3				inc	bl
+ F3AD  87 D1				xchg	dx,cx			;calc row width
+ F3AF  2A CA				sub	cl,dl
+ F3B1  32 ED				xor	ch,ch
+ F3B3  41				inc	cx
+
+					TEXTOFF 			;calc addr of top of region
+ F3B4  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F3B6  86 C6		      + 	xchg	al,dh
+ F3B8  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F3BC  03 C2		      + 	add	ax,dx
+ F3BE  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F3C0  03 06 0000 E			add	ax,crt_regen_base	;add in page offset
+ F3C4  8B F8				mov	di,ax
+
+ F3C6  8B 16 0000 E			mov	dx,crt_cols		;get row delta
+ F3CA  D1 E2				shl	dx,1			;convert to words
+
+					SCRSEG				;get seg of screen
+ F3CC  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F3CF  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F3D4  75 03		      + 	jne	??0000
+ F3D6  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F3D9			      + ??0000:
+ F3D9  8E C0				mov	es,ax
+
+ F3DB  EB 21				jmp	short filltext		;fill in rows
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-33
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+
+				; common scroll/blank code for text modes
+				;
+				;	si	= source pointer
+				;	di	= destination pointer
+				;	dx	= row delta (+/-)
+				;	cx	= chars to copy/fill per line
+				;	bh	= number of lines to copy
+				;	bl	= number of lines to blank
+				;	attrs	= top of stack, high byte
+
+ F3DD				text_scroll:
+					SCRSEG				;get screen ram segment
+ F3DD  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F3E0  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F3E5  75 03		      + 	jne	??0001
+ F3E7  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F3EA			      + ??0001:
+ F3EA  8E D8				mov	ds,ax
+ F3EC  8E C0				mov	es,ax
+
+ F3EE				copyrow:
+ F3EE  56				push	si			;save source/dest pointers
+ F3EF  57				push	di
+ F3F0  51				push	cx			;..and char count for row
+ F3F1  F3/ A5				rep	movsw			;copy line
+ F3F3  59				pop	cx			;restore count
+ F3F4  5F				pop	di			;..and src/dest pointers
+ F3F5  5E				pop	si
+ F3F6  03 F2				add	si,dx			;update ptrs to next row
+ F3F8  03 FA				add	di,dx
+ F3FA  FE CF				dec	bh			;check if done copying
+ F3FC  75 F0				jnz	copyrow
+
+ F3FE				filltext:
+ F3FE  58				pop	ax			;restore fill char attr in ah
+ F3FF  B0 20				mov	al,' '			;fill remaining rows with blanks
+ F401				fillrow:
+ F401  57				push	di			;save dest pointer
+ F402  51				push	cx			;..and row count
+ F403  F3/ AB				rep	stosw			;fill row with blanks
+ F405  59				pop	cx			;restore row count
+ F406  5F				pop	di			;..and dest pointer
+ F407  03 FA				add	di,dx			;update dest to next row
+ F409  FE CB				dec	bl			;check if done
+ F40B  75 F4				jnz	fillrow
+
+ F40D  C3				ret				;done
+
+
+
+					;setup to scroll graphics region up
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-34
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+ F40E				gr_up:
+ F40E  3C 00				cmp	al,0			;check to blank region
+ F410  75 03				jnz	gr_up1
+ F412  E9 F4AE R			jmp	gr_blank
+
+ F415				gr_up1:
+ F415  8A D8				mov	bl,al			;rows to blank
+ F417  8A FE				mov	bh,dh			;calc rows to copy
+ F419  2A FD				sub	bh,ch
+ F41B  2A FB				sub	bh,bl
+ F41D  FE C7				inc	bh
+
+ F41F  87 CA				xchg	cx,dx			;calc row width
+ F421  2A CA				sub	cl,dl
+ F423  32 ED				xor	ch,ch
+ F425  41				inc	cx
+
+ F426  52				push	dx			;save top of region
+					GRPOFF				;calc dest screen pointer
+ F427  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F429  F6 E6		      + 	mul	dh
+ F42B  D1 E0		      + 	shl	ax,1
+ F42D  32 F6		      + 	xor	dh,dh			;dx = column
+ F42F  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F434  74 02		      + 	je	??0002
+ F436  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F438  03 C2		      + ??0002: add	ax,dx			;add horiz offset to raster
+ F43A  8B F8				mov	di,ax
+
+ F43C  5A				pop	dx			;restore to of region
+ F43D  02 F3				add	dh,bl			;calc source screeb pointer
+					GRPOFF
+ F43F  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F441  F6 E6		      + 	mul	dh
+ F443  D1 E0		      + 	shl	ax,1
+ F445  32 F6		      + 	xor	dh,dh			;dx = column
+ F447  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F44C  74 02		      + 	je	??0003
+ F44E  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F450  03 C2		      + ??0003: add	ax,dx			;add horiz offset to raster
+ F452  8B F0				mov	si,ax
+
+ F454  BA 0050				mov	dx,80			;get row delta
+ F457  E9 F4E1 R			jmp	gr_scroll
+
+
+					;setup to scroll graphics region down
+
+ F45A				gr_down:
+ F45A  3C 00				cmp	al,0			;check to blank region
+ F45C  74 50				jz	gr_blank
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-35
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F45E  8A D8				mov	bl,al			;rows to blank
+ F460  8A FE				mov	bh,dh			;calc rows to copy
+ F462  2A FD				sub	bh,ch
+ F464  2A FB				sub	bh,bl
+ F466  FE C7				inc	bh
+
+ F468  8A C2				mov	al,dl			;calc row width
+ F46A  2A C1				sub	al,cl
+ F46C  98				cbw
+ F46D  40				inc	ax
+ F46E  8A D1				mov	dl,cl			;left edge of region
+ F470  8B C8				mov	cx,ax
+
+ F472  52				push	dx			;save bottom of region
+					GRPOFF				;calc dest screen pointer
+ F473  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F475  F6 E6		      + 	mul	dh
+ F477  D1 E0		      + 	shl	ax,1
+ F479  32 F6		      + 	xor	dh,dh			;dx = column
+ F47B  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F480  74 02		      + 	je	??0004
+ F482  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F484  03 C2		      + ??0004: add	ax,dx			;add horiz offset to raster
+ F486  8B F8				mov	di,ax
+
+ F488  5A				pop	dx			;restore to of region
+ F489  2A F3				sub	dh,bl			;calc source screeb pointer
+					GRPOFF
+ F48B  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F48D  F6 E6		      + 	mul	dh
+ F48F  D1 E0		      + 	shl	ax,1
+ F491  32 F6		      + 	xor	dh,dh			;dx = column
+ F493  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F498  74 02		      + 	je	??0005
+ F49A  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F49C  03 C2		      + ??0005: add	ax,dx			;add horiz offset to raster
+ F49E  8B F0				mov	si,ax
+
+ F4A0  BA FFB0				mov	dx,-80			;get row delta
+ F4A3  81 C6 00F0			add	si,3*80 		;start with last raster of row
+ F4A7  81 C7 00F0			add	di,3*80
+
+ F4AB  EB 34 90 			jmp	gr_scroll		;goto common routines
+
+
+					;setup to blank entire graphics region
+
+ F4AE				gr_blank:
+ F4AE  8A DE				mov	bl,dh			;calc num of rows to blank
+ F4B0  2A DD				sub	bl,ch
+ F4B2  FE C3				inc	bl
+ F4B4  87 D1				xchg	dx,cx			;calc row width
+ F4B6  2A CA				sub	cl,dl
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-36
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F4B8  32 ED				xor	ch,ch
+ F4BA  41				inc	cx
+
+					GRPOFF				;calc addr of top of region
+ F4BB  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F4BD  F6 E6		      + 	mul	dh
+ F4BF  D1 E0		      + 	shl	ax,1
+ F4C1  32 F6		      + 	xor	dh,dh			;dx = column
+ F4C3  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F4C8  74 02		      + 	je	??0006
+ F4CA  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F4CC  03 C2		      + ??0006: add	ax,dx			;add horiz offset to raster
+ F4CE  8B F8				mov	di,ax
+
+ F4D0  BA 0050				mov	dx,80			;get row delta
+
+ F4D3  8A 3E 0000 E			mov	bh,crt_mode		;setup hi-res/med-res flag
+ F4D7  80 F7 06 			xor	bh,6			;zero if hi-res, non-zero if med-res
+
+ F4DA  B8 B800				mov	ax,0B800h		;get seg of screen
+ F4DD  8E C0				mov	es,ax
+
+ F4DF  EB 46				jmp	short gr_fill		;fill in rows
+
+
+				; common scroll/blank code for graphics modes
+				;
+				;	si	= source pointer
+				;	di	= destination pointer
+				;	dx	= row delta (+/-)
+				;	cx	= chars to copy/fill per line
+				;	bh	= number of lines to copy
+				;	bl	= number of lines to blank
+
+ F4E1				gr_scroll:
+ F4E1  8A 26 0000 E			mov	ah,crt_mode		;form med-res flag
+ F4E5  80 F4 06 			xor	ah,6			;non-zero if med res, zero if hi-res
+
+ F4E8  50				push	ax
+ F4E9  B8 B800				mov	ax,0B800h		;get screen ram segment
+ F4EC  8E D8				mov	ds,ax
+ F4EE  8E C0				mov	es,ax
+ F4F0  58				pop	ax
+
+ F4F1				gr_copy:
+ F4F1  D0 E7				shl	bh,1			;convert row count to raster pairs
+ F4F3  D0 E7				shl	bh,1
+
+ F4F5				gr_copy1:				;copy even raster
+ F4F5  56				push	si			;save screen addrs and count
+ F4F6  57				push	di
+ F4F7  51				push	cx
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-37
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F4F8  0A E4				or	ah,ah			;check if hi-res or med-res
+ F4FA  75 04				jnz	short gr_copy1a
+
+ F4FC  F3/ A4				rep	movsb			;copy raster for hi-res
+ F4FE  EB 02				jmp	short gr_copy2
+
+ F500				gr_copy1a:
+ F500  F3/ A5				rep	movsw			;copy raster for med-res
+
+ F502				gr_copy2:				;copy odd raster
+ F502  59				pop	cx			;restore addr and count
+ F503  5F				pop	di
+ F504  5E				pop	si
+ F505  56				push	si			;..and save again
+ F506  57				push	di
+ F507  51				push	cx
+ F508  81 C6 2000			add	si,2000h		;do odd raster
+ F50C  81 C7 2000			add	di,2000h
+
+ F510  0A E4				or	ah,ah			;check if hi-res or med-res
+ F512  75 04				jnz	short gr_copy2a
+
+ F514  F3/ A4				rep	movsb			;copy raster for hi-res
+ F516  EB 02				jmp	short gr_copy3
+
+ F518				gr_copy2a:
+ F518  F3/ A5				rep	movsw			;copy raster for med-res
+
+ F51A				gr_copy3:
+ F51A  59				pop	cx			;restore addrs and counts
+ F51B  5F				pop	di
+ F51C  5E				pop	si
+ F51D  03 F2				add	si,dx			;add delta to raster addrs
+ F51F  03 FA				add	di,dx
+
+ F521  FE CF				dec	bh			;check if more rows
+ F523  75 D0				jnz	gr_copy1
+
+ F525  8A FC				mov	bh,ah			;copy of hi/med res flag
+
+ F527				gr_fill:
+ F527  D0 E3				shl	bl,1			;convert row count to raster pairs
+ F529  D0 E3				shl	bl,1
+ F52B  33 C0				xor	ax,ax			;fill with nulls
+
+ F52D				gr_fill1:
+ F52D  57				push	di			;save screen addr and count
+ F52E  51				push	cx
+
+ F52F  0A FF				or	bh,bh			;check if hi-res or med-res
+ F531  75 04				jnz	short gr_fill1a
+
+ F533  F3/ AA				rep	stosb			;blank raster for hi-res
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-38
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F535  EB 02				jmp	short gr_fill2
+
+ F537				gr_fill1a:
+ F537  F3/ AB				rep	stosw			;blank raster for med-res
+
+ F539				gr_fill2:
+ F539  59				pop	cx			;restore addr and count
+ F53A  5F				pop	di
+ F53B  57				push	di			;..and save again
+ F53C  51				push	cx
+ F53D  81 C7 2000			add	di,2000h		;do odd raster
+
+ F541  0A FF				or	bh,bh			;check if hi-res or med-res
+ F543  75 04				jnz	short gr_fill2a
+
+ F545  F3/ AA				rep	stosb			;blank raster for hi-res
+ F547  EB 02				jmp	short gr_fill3
+
+ F549				gr_fill2a:
+ F549  F3/ AB				rep	stosw			;blank raster for med-res
+
+ F54B				gr_fill3:
+ F54B  59				pop	cx
+ F54C  5F				pop	di
+ F54D  03 FA				add	di,dx
+ F54F  FE CB				dec	bl
+ F551  75 DA				jnz	gr_fill1
+
+ F553  C3				ret				;done
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-39
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	READ_CHAR_ATR  --						*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F554				READ_CHAR_ATR:
+
+					JNGRP	read_ca 		;check if in graphics mode
+ F554  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F559  72 0A		      + 	jb	read_ca
+ F55B  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F560  77 03		      + 	ja	read_ca
+ F562  E9 F739 R			jmp	gr_read 		;handle graphics char
+
+ F565				read_ca:
+					GETCURS BH			;get cursor for page
+ F565  8A DF		      + 	mov	bl,BH
+ F567  32 FF		      + 	xor	bh,bh
+ F569  D1 E3		      + 	shl	bx,1
+ F56B  8B 97 0000 E	      + 	mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+
+					SCRPTR	[bp].RBH		;es:bx gets ptr to char cell
+ F56F  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F571  86 C6		      + 	xchg	al,dh
+ F573  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F577  03 C2		      + 	add	ax,dx
+ F579  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F57B  8B F8		      + 	mov	di,ax			;DI gets pointer
+ F57D  8A 46 03 	      + 	mov	al,[bp].RBH			;recover page
+ F580  98		      + 	cbw
+ F581  F7 26 0000 E	      + 	mul	crt_regen_leng		;calc page offset
+ F585  03 F8		      + 	add	di,ax			;add offset into address
+ F587  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F58A  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F58F  75 03		      + 	jne	??0007
+ F591  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F594			      + ??0007:
+ F594  8E C0		      + 	mov	es,ax			;es:di gets ptr to char cell
+ F596  26: 8B 05			mov	ax,es:[di]		;read char and attrs
+ F599  89 46 00 			mov	[bp].RAX,ax		;return them in AX
+
+ F59C  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-40
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	WRITE_CHAR_ATR	--						*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F59D				WRITE_CHAR_ATR:
+
+ F59D  E3 4A				jcxz	writex			;done if no characters
+
+					JNGRP	write_ca		;check if in graphics mode
+ F59F  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F5A4  72 0A		      + 	jb	write_ca
+ F5A6  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F5AB  77 03		      + 	ja	write_ca
+ F5AD  E9 F633 R			jmp	gr_write
+
+ F5B0				write_ca:
+					GETCURS BH			;get cursor for page
+ F5B0  8A DF		      + 	mov	bl,BH
+ F5B2  32 FF		      + 	xor	bh,bh
+ F5B4  D1 E3		      + 	shl	bx,1
+ F5B6  8B 97 0000 E	      + 	mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+
+					SCRPTR	[bp].RBH		;ES:DI gets ptr to char cell
+ F5BA  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F5BC  86 C6		      + 	xchg	al,dh
+ F5BE  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F5C2  03 C2		      + 	add	ax,dx
+ F5C4  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F5C6  8B F8		      + 	mov	di,ax			;DI gets pointer
+ F5C8  8A 46 03 	      + 	mov	al,[bp].RBH			;recover page
+ F5CB  98		      + 	cbw
+ F5CC  F7 26 0000 E	      + 	mul	crt_regen_leng		;calc page offset
+ F5D0  03 F8		      + 	add	di,ax			;add offset into address
+ F5D2  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F5D5  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F5DA  75 03		      + 	jne	??0008
+ F5DC  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F5DF			      + ??0008:
+ F5DF  8E C0		      + 	mov	es,ax			;es:di gets ptr to char cell
+ F5E1  8A 46 00 			mov	al,[bp].RAL		;recover char
+ F5E4  8A 66 02 			mov	ah,[bp].RBL		;..and attribute
+ F5E7  F3/ AB				rep	stosw			;write to screen
+
+ F5E9				writex:
+ F5E9  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-41
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	WRITE_CHAR  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F5EA				WRITE_CHAR:
+
+ F5EA  E3 FD				jcxz	writex			;done if no characters
+
+					JGRP	gr_write		;check if graphics mode
+ F5EC  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F5F1  72 07		      + 	jb	??0009
+ F5F3  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F5F8  76 39		      + 	jbe	gr_write
+ F5FA			      + ??0009:
+
+					GETCURS BH			;get cursor for page
+ F5FA  8A DF		      + 	mov	bl,BH
+ F5FC  32 FF		      + 	xor	bh,bh
+ F5FE  D1 E3		      + 	shl	bx,1
+ F600  8B 97 0000 E	      + 	mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+
+					SCRPTR	[bp].RBH		;ES:DI gets ptr to char
+ F604  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F606  86 C6		      + 	xchg	al,dh
+ F608  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F60C  03 C2		      + 	add	ax,dx
+ F60E  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F610  8B F8		      + 	mov	di,ax			;DI gets pointer
+ F612  8A 46 03 	      + 	mov	al,[bp].RBH			;recover page
+ F615  98		      + 	cbw
+ F616  F7 26 0000 E	      + 	mul	crt_regen_leng		;calc page offset
+ F61A  03 F8		      + 	add	di,ax			;add offset into address
+ F61C  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F61F  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F624  75 03		      + 	jne	??000A
+ F626  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F629			      + ??000A:
+ F629  8E C0		      + 	mov	es,ax			;es:di gets ptr to char cell
+ F62B  8A 46 00 			mov	al,[bp].RAL		;recover character
+ F62E				write_c1:
+ F62E  AA				stosb				;write char
+ F62F  47				inc	di			;and skip attribute
+ F630  E2 FC				loop	write_c1		;until all written
+
+ F632  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-42
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	GR_WRITE  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F633				GR_WRITE:
+
+ F633  8B 16 0000 E			mov	dx,crt_curs_pos 	;get current cursor
+					GRPOFF				;get first raster in screen ram
+ F637  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F639  F6 E6		      + 	mul	dh
+ F63B  D1 E0		      + 	shl	ax,1
+ F63D  32 F6		      + 	xor	dh,dh			;dx = column
+ F63F  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F644  74 02		      + 	je	??000B
+ F646  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F648  03 C2		      + ??000B: add	ax,dx			;add horiz offset to raster
+ F64A  8B F8				mov	di,ax
+ F64C  B8 B800				mov	ax,0B800h		;graphics screen segment
+ F64F  8E C0				mov	es,ax			;es:di = ptr to first raster
+
+ F651  8A 5E 02 			mov	bl,[bp].RBL		;recover color
+ F654  80 3E 0000 E 06			cmp	crt_mode,6		;check if hi-res
+ F659  75 0D				jne	gr_wr1			;skip to med-res
+
+									;hi-res
+ F65B  BA F6C7 R			mov	dx,offset code:gr_hi	;normal write
+ F65E  F6 C3 80 			test	bl,80h
+ F661  74 20				jz	gr_wr2
+ F663  BA F6CA R			mov	dx,offset code:gr_hi_xor ;xor chars into screen
+ F666  EB 1B				jmp	short gr_wr2
+
+ F668				gr_wr1: 				;medium res
+ F668  BA F6D1 R			mov	dx,offset code:gr_med	;normal write
+ F66B  F6 C3 80 			test	bl,80h
+ F66E  74 03				jz	gr_wr1a
+ F670  BA F6D9 R			mov	dx,offset code:gr_med_xor  ;xor chars into screen
+ F673				gr_wr1a:
+ F673  81 E3 0003			and	bx,0003 		;isolate color bits
+ F677  D1 E3				shl	bx,1			;form index into expansion table
+ F679  D1 E3				shl	bx,1
+ F67B  D1 E3				shl	bx,1
+ F67D  D1 E3				shl	bx,1
+ F67F  81 C3 F6F9 R			add	bx,offset code:exptab	;bx = offset of exp table for color
+
+
+ F683				gr_wr2:
+ F683  8A 46 00 			mov	al,[bp].RAL		;recover character
+ F686  25 007F				and	ax,007Fh		;form index into char generator
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-43
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F689  D1 E0				shl	ax,1			;each char font is 8 bytes
+ F68B  D1 E0				shl	ax,1
+ F68D  D1 E0				shl	ax,1
+
+ F68F  F6 46 00 80			test	[bp].RAL,80h		;check if upper ascii
+ F693  75 0C				jnz	gr_wr2a
+
+ F695  05 FA6E				add	ax,chset		;get address of font
+ F698  8B F0				mov	si,ax			;ds:si = ptr to character font
+ F69A  B8 F000				mov	ax, CHSET_SEG		; use rom segment hsp 9/20/84
+ F69D  8E D8				mov	ds,ax
+					assume	ds:nothing
+
+ F69F  EB 0A				jmp	short gr_wrloop
+
+ F6A1				gr_wr2a:
+ F6A1  33 F6				xor	si,si			;get upper ascii char gen vector
+ F6A3  8E DE				mov	ds,si			;..from interrupt vector table
+ F6A5  C5 36 007C			lds	si,ds:dword ptr[4*CHSET_INT]
+					assume	ds:nothing
+ F6A9  03 F0				add	si,ax			;add in offset to character
+
+
+				;graphics chars write loop
+				;	ds:si = ptr to rasters for character
+				;	es:di = ptr to start byte of first raster in screen ram
+				;	cx    = character count
+				;	bx    = color expansion table (for medium res)
+				;	dx    = offset of routine to write raster to screen ram
+
+
+ F6AB				gr_wrloop:
+ F6AB  B4 04				mov	ah,4			;four even/odd raster pairs per char
+ F6AD				gr_wrloopa:
+ F6AD  51				push	cx			;save registers
+ F6AE  57				push	di
+ F6AF  AC				lodsb				;get next raster of character
+ F6B0  FF D2				call	dx			;write to screen
+ F6B2  5F				pop	di			;restore registers
+ F6B3  59				pop	cx
+ F6B4  51				push	cx			;save them again
+ F6B5  57				push	di
+ F6B6  81 C7 2000			add	di,2000h		;do odd raster
+ F6BA  AC				lodsb
+ F6BB  FF D2				call	dx
+ F6BD  5F				pop	di			;restore registers
+ F6BE  59				pop	cx
+ F6BF  83 C7 50 			add	di,80			;next even raster
+
+ F6C2  FE CC				dec	ah			;check if more raster pairs
+ F6C4  75 E7				jnz	gr_wrloopa		;if so, do them
+
+ F6C6  C3				ret				;done
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-44
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+
+
+				;write routines
+				;	these routines write a raster for the character, depending
+				;	on mode (med- or hi-res), and combination rule (set or xor).
+
+ F6C7				gr_hi:
+ F6C7  F3/ AA				rep	stosb			;write raster of char for hi-res
+ F6C9  C3				ret
+
+ F6CA				gr_hi_xor:
+ F6CA  26: 30 05			xor	es:[di],al		;xor raster of char for hi-res
+ F6CD  47				inc	di			;next character
+ F6CE  E2 FA				loop	gr_hi_xor		;..until all chars done
+ F6D0  C3				ret
+
+ F6D1				gr_med:
+ F6D1  50				push	ax			;write raster of char in med-res
+ F6D2  E8 F6E6 R			call	expand			;expand bits to pixel color
+ F6D5  F3/ AB				rep	stosw			;write raster for chars
+ F6D7  58				pop	ax			;restore reg
+ F6D8  C3				ret
+
+ F6D9				gr_med_xor:
+ F6D9  50				push	ax			;xor raster of char in med-res
+ F6DA  E8 F6E6 R			call	expand			;expand bits to pixel color
+ F6DD				gr_medx:
+ F6DD  26: 31 05			xor	es:[di],ax		;xor raster of character
+ F6E0  47				inc	di			;next character
+ F6E1  47				inc	di
+ F6E2  E2 F9				loop	gr_medx 		;..until all chars done
+ F6E4  58				pop	ax			;restore register
+ F6E5  C3				ret
+
+
+				;expand byte into word of color pixels
+				;	bx = expansion table for selected color
+
+ F6E6				expand:
+ F6E6  8A E0				mov	ah,al			;save byte
+ F6E8  24 0F				and	al,0Fh			;expand low nibble of byte
+ F6EA  2E: D7				xlat	cs:byte ptr[bx]
+ F6EC  86 E0				xchg	ah,al			;save it
+ F6EE  D0 E8				shr	al,1			;expand hi nibble of byte
+ F6F0  D0 E8				shr	al,1
+ F6F2  D0 E8				shr	al,1
+ F6F4  D0 E8				shr	al,1
+ F6F6  2E: D7				xlat	cs:byte ptr[bx]
+ F6F8  C3				ret
+
+
+ F6F9  00 00 00 00		exptab	db	00000000b,00000000b,00000000b,00000000b ; color = 0
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-45
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F6FD  00 00 00 00			db	00000000b,00000000b,00000000b,00000000b
+ F701  00 00 00 00			db	00000000b,00000000b,00000000b,00000000b
+ F705  00 00 00 00			db	00000000b,00000000b,00000000b,00000000b
+
+ F709  00 01 04 05			db	00000000b,00000001b,00000100b,00000101b ; color = 1
+ F70D  10 11 14 15			db	00010000b,00010001b,00010100b,00010101b
+ F711  40 41 44 45			db	01000000b,01000001b,01000100b,01000101b
+ F715  50 51 54 55			db	01010000b,01010001b,01010100b,01010101b
+
+ F719  00 02 08 0A			db	00000000b,00000010b,00001000b,00001010b ; color = 2
+ F71D  20 22 28 2A			db	00100000b,00100010b,00101000b,00101010b
+ F721  80 82 88 8A			db	10000000b,10000010b,10001000b,10001010b
+ F725  A0 A2 A8 AA			db	10100000b,10100010b,10101000b,10101010b
+
+ F729  00 03 0C 0F			db	00000000b,00000011b,00001100b,00001111b ; color = 3
+ F72D  30 33 3C 3F			db	00110000b,00110011b,00111100b,00111111b
+ F731  C0 C3 CC CF			db	11000000b,11000011b,11001100b,11001111b
+ F735  F0 F3 FC FF			db	11110000b,11110011b,11111100b,11111111b
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-46
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	GR_READ  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F739				GR_READ:
+
+ F739  83 EC 08 			sub	sp,8			;local storage of char on stack
+
+ F73C  8B 16 0000 E			mov	dx,crt_curs_pos 	;get ptr to char in screen ram
+					GRPOFF
+ F740  B0 A0		      + 	mov	al,160			;ax gets row * (8*80)/2
+ F742  F6 E6		      + 	mul	dh
+ F744  D1 E0		      + 	shl	ax,1
+ F746  32 F6		      + 	xor	dh,dh			;dx = column
+ F748  80 3E 0000 E 06	      + 	cmp	crt_mode,6		;check if hires
+ F74D  74 02		      + 	je	??000C
+ F74F  D1 E2		      + 	shl	dx,1			;med res: char width is a word
+ F751  03 C2		      + ??000C: add	ax,dx			;add horiz offset to raster
+ F753  8B F0				mov	si,ax
+ F755  B8 B800				mov	ax,0B800h
+ F758  8E C0				mov	es,ax			;es:si = ptr to char
+
+					;copy character image into local buffer
+
+ F75A  8B FC				mov	di,sp			;ss:di = ptr to local buffer
+
+ F75C  B9 0004				mov	cx,4			;four raster even/odd pairs
+ F75F  80 3E 0000 E 06			cmp	crt_mode,6		;check if hi-res or med-res
+ F764  75 14				jnz	gr_rd_med
+
+ F766				gr_rd_hi:
+ F766  26: 8A 04			mov	al,es:[si]		;get even raster
+ F769  26: 8A A4 2000			mov	ah,es:[si+2000h]	;get odd raster
+ F76E  36: 89 05			mov	ss:word ptr[di],ax	;copy them to local buffer
+ F771  47				inc	di
+ F772  47				inc	di
+ F773  83 C6 50 			add	si,80			;next raster pair
+ F776  E2 EE				loop	gr_rd_hi
+
+ F778  EB 1D				jmp	short gr_rd1
+
+ F77A				gr_rd_med:
+ F77A  51				push	cx			;save count
+ F77B  26: 8B 04			mov	ax,es:[si]		;get even raster
+ F77E  E8 F7DD R			call	compress		;compress pixels
+ F781  36: 88 05			mov	ss:byte ptr[di],al	;copy to local buffer
+ F784  47				inc	di
+ F785  26: 8B 84 2000			mov	ax,es:[si+2000h]	;get odd raster
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-47
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F78A  E8 F7DD R			call	compress		;compress pixels
+ F78D  36: 88 05			mov	ss:byte ptr[di],al	;copy to local buffer
+ F790  47				inc	di
+ F791  83 C6 50 			add	si,80			;next raster pair
+ F794  59				pop	cx			;recover count
+ F795  E2 E3				loop	gr_rd_med
+
+ F797				gr_rd1:
+ F797  8C D7				mov	di,ss			;es:di = ptr to local buffer
+ F799  8E C7				mov	es,di
+ F79B  8B FC				mov	di,sp
+
+ F79D  26: 8A 45 02			mov	al,es:[di+2]		;arbitrary raster for 1st comparision
+ F7A1  B4 00				mov	ah,0			;ascii code
+
+									;ds:si = ptr to std char set
+ F7A3  BE F000				mov	si, CHSET_SEG		; use rom segment hsp 9/20/84
+ F7A6  8E DE				mov	ds,si
+					assume	ds:nothing
+ F7A8  BE FA6E				mov	si,chset
+
+ F7AB				gr_scan:
+ F7AB  B9 0080				mov	cx,128			;scan through char set
+
+ F7AE				gr_scan1:
+ F7AE  3A 44 02 			cmp	al,[si+2]		;first check arbitrary raster
+ F7B1  75 0D				jne	gr_scan2		;skip if no match
+
+ F7B3  51				push	cx			;save count
+ F7B4  56				push	si			;..and character pointers
+ F7B5  57				push	di
+
+ F7B6  B9 0004				mov	cx,4			;compare curr char with buffer
+ F7B9  F3/ A7				repe	cmpsw
+
+ F7BB  5F				pop	di			;restore registers
+ F7BC  5E				pop	si
+ F7BD  59				pop	cx
+
+ F7BE  74 16				je	gr_rdx			;done if match found
+
+ F7C0				gr_scan2:
+ F7C0  FE C4				inc	ah			;bump ascii code
+ F7C2  83 C6 08 			add	si,8			;next character
+
+ F7C5  E2 E7				loop	gr_scan1		;cont if more characters
+
+ F7C7  80 FC 00 			cmp	ah,0			;non-zero if standard char set
+ F7CA  74 0A				jz	gr_rdx			;else done
+
+ F7CC  33 F6				xor	si,si			;check upper ascii character set
+ F7CE  8E DE				mov	ds,si			;get ptr to char set from int vector
+ F7D0  C5 36 007C			lds	si,ds:dword ptr[4*CHSET_INT]
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-48
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+ F7D4  EB D5				jmp	short gr_scan
+
+ F7D6				gr_rdx:
+ F7D6  88 66 00 			mov	[bp].RAL,ah		;return ascii code
+
+ F7D9  83 C4 08 			add	sp,8			;clear off stack
+ F7DC  C3				ret
+
+
+
+				;compress --
+				;	this routine takes a word of color pixels and compresses
+				;	it into a byte of bits, where the bits are set if the
+				;	pixel was on (non-zero).
+				;
+				;	entry:	ax = word of pixels,
+				;	exit:	al = byte,
+				;		bx,cx are destroyed.
+
+ F7DD				compress:
+ F7DD  86 E0				xchg	ah,al
+ F7DF  8B D8				mov	bx,ax			;copy pixels
+ F7E1  81 E3 5555			and	bx,5555h		;mask the lsb of each pixel
+ F7E5  D1 E3				shl	bx,1			;combine them with msbof each pixel
+ F7E7  0B D8				or	bx,ax
+ F7E9  B9 0008				mov	cx,8			;eight bits to do
+ F7EC				comp:
+ F7EC  D1 EB				shr	bx,1			;set psw.c if pixel is on
+ F7EE  D1 EB				shr	bx,1
+ F7F0  D0 D8				rcr	al,1			;move into result
+ F7F2  E2 F8				loop	comp			;do each pixel
+
+ F7F4  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-49
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	WRITE_TTY  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F7F5				WRITE_TTY:
+
+ F7F5  8A 46 00 			mov	al,[bp].RAL		;recover character
+					GETCURS crt_curr_page		;dx= cursor, bx= curs table index
+ F7F8  8A 1E 0000 E	      + 	mov	bl,crt_curr_page
+ F7FC  32 FF		      + 	xor	bh,bh
+ F7FE  D1 E3		      + 	shl	bx,1
+ F800  8B 97 0000 E	      + 	mov	dx,crt_curs_pos[bx]	;bx gets cursor position
+
+ F804  3C 07				cmp	al,BELL 		;check if BEL
+ F806  74 25				je	tty_bell
+
+ F808  3C 08				cmp	al,BS			;check if BS
+ F80A  74 17				je	tty_bs
+
+ F80C  3C 0A				cmp	al,LF			;check if LF
+ F80E  74 09				je	tty_lf
+
+ F810  3C 0D				cmp	al,CR			;check for CR
+ F812  75 1D				jne	tty_put
+
+					;carriage return
+
+ F814				tty_cr:
+ F814  B2 00				mov	dl,0			;pos cursor to beg of line
+ F816  EB 6A 90 			jmp	tty_curs		;..and set cursor
+
+
+					;line feed
+
+ F819				tty_lf:
+ F819  80 FE 18 			cmp	dh,24			;check if bottom of screen
+ F81C  73 7B				jae	tty_scroll		;must scroll screen
+ F81E  FE C6				inc	dh			;else put cursor on next line
+ F820  EB 60 90 			jmp	tty_curs		;..and set it
+
+
+					;back space
+
+ F823				tty_bs:
+ F823  80 FA 00 			cmp	dl,0			;check if beg of line
+ F826  74 08				jz	tty_ret 		;yes: do nothing
+ F828  FE CA				dec	dl			;backup cursor
+ F82A  EB 56 90 			jmp	tty_curs		;..and set it
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-50
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+
+					;sound bell
+
+ F82D				tty_bell:
+ F82D  E8 F949 R			call	beep			;sound the bell
+
+ F830				tty_ret:
+ F830  C3				ret
+
+
+					;write character
+ F831				tty_put:
+ F831  52				push	dx			;save cursor
+ F832  53				push	bx
+
+					JNGRP	tty_put1		;check if graphics
+ F833  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F838  72 11		      + 	jb	tty_put1
+ F83A  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F83F  77 0A		      + 	ja	tty_put1
+
+									;write graphics char
+ F841  1E				push	ds			;save ds
+ F842  B9 0001				mov	cx,1			;one character
+ F845  E8 F633 R			call	gr_write		;write the character
+ F848  1F				pop	ds			;restore ds
+
+ F849  EB 2D				jmp	short tty_put2
+
+ F84B				tty_put1:
+					SCRPTR	crt_curr_page		;es:di gets ptr to char
+ F84B  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F84D  86 C6		      + 	xchg	al,dh
+ F84F  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F853  03 C2		      + 	add	ax,dx
+ F855  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F857  8B F8		      + 	mov	di,ax			;DI gets pointer
+ F859  A0 0000 E	      + 	mov	al,crt_curr_page			;recover page
+ F85C  98		      + 	cbw
+ F85D  F7 26 0000 E	      + 	mul	crt_regen_leng		;calc page offset
+ F861  03 F8		      + 	add	di,ax			;add offset into address
+ F863  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F866  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F86B  75 03		      + 	jne	??000D
+ F86D  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F870			      + ??000D:
+ F870  8E C0		      + 	mov	es,ax			;es:di gets ptr to char cell
+ F872  8A 46 00 			mov	al,[bp].RAL		;recover character
+ F875  26: 88 05			mov	es:[di],al		;write character to screen
+
+ F878				tty_put2:
+ F878  5B				pop	bx			;restore cursor
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-51
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F879  5A				pop	dx
+
+ F87A  FE C2				inc	dl			;bump cursor
+ F87C  3A 16 0000 E			cmp	dl,byte ptr crt_cols	;check if past end of line
+ F880  73 07				jae	tty_wrap
+
+ F882				tty_curs:
+ F882  89 97 0000 E			mov	crt_curs_pos[bx],dx	;update cursor tables
+ F886  E9 F262 R			jmp	putcurs 		;and set h/w cursor
+
+
+					;cursor wrap to next line
+
+ F889				tty_wrap:
+ F889  B2 00				mov	dl,0			;beg of next line
+ F88B  80 FE 18 			cmp	dh,24			;check if need to scroll
+ F88E  73 04				jae	tty_wrap1		;yes: scroll screen
+
+ F890  FE C6				inc	dh			;cursor to next line
+ F892  EB EE				jmp	tty_curs		;..and update cursor
+
+ F894				tty_wrap1:
+ F894  52				push	dx			;save cursor pos
+ F895  E8 F882 R			call	tty_curs		;update cursor
+ F898  5A				pop	dx			;restore cursor
+
+					;scroll screen
+
+ F899				tty_scroll:
+					JGRP   tty_scrll		;check if graphics
+ F899  80 3E 0000 E 04	      + 	cmp	crt_mode,4
+ F89E  72 07		      + 	jb	??000E
+ F8A0  80 3E 0000 E 06	      + 	cmp	crt_mode,6
+ F8A5  76 2B		      + 	jbe	tty_scrll
+ F8A7			      + ??000E:
+
+									;scroll with attr of curr char
+					SCRPTR	crt_curr_page		;es:di gets ptr to char cell
+ F8A7  33 C0		      + 	xor	ax,ax			;al = row, dx = col
+ F8A9  86 C6		      + 	xchg	al,dh
+ F8AB  F6 26 0000 E	      + 	mul	byte ptr crt_cols	;char cell in screen
+ F8AF  03 C2		      + 	add	ax,dx
+ F8B1  D1 E0		      + 	shl	ax,1			;convert to byte offset
+ F8B3  8B F8		      + 	mov	di,ax			;DI gets pointer
+ F8B5  A0 0000 E	      + 	mov	al,crt_curr_page			;recover page
+ F8B8  98		      + 	cbw
+ F8B9  F7 26 0000 E	      + 	mul	crt_regen_leng		;calc page offset
+ F8BD  03 F8		      + 	add	di,ax			;add offset into address
+ F8BF  B8 B800		      + 	mov	ax,0B800h		;assume color
+ F8C2  80 3E 0000 E 07	      + 	cmp	crt_mode,7		;check if monochrome
+ F8C7  75 03		      + 	jne	??000F
+ F8C9  B8 B000		      + 	mov	ax,0B000h		;set for monochrome
+ F8CC			      + ??000F:
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-52
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F8CC  8E C0		      + 	mov	es,ax			;es:di gets ptr to char cell
+ F8CE  26: 8A 7D 01			mov	bh,es:[di+1]		;get attribute
+
+ F8D2				tty_scrll:
+ F8D2  B9 0000				mov	cx,0			;scroll from top of screen
+ F8D5  B6 18				mov	dh,24			;..to bottom line
+ F8D7  8A 16 0000 E			mov	dl,byte ptr crt_cols	;..last column
+ F8DB  FE CA				dec	dl
+ F8DD  B0 01				mov	al,1			;scroll one line
+ F8DF  E9 F2EC R			jmp	scrollup
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-53
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	PIXEL  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F8E2				PIXEL:
+
+
+ F8E2				set_pixel:
+ F8E2  E8 F911 R			call	pixaddr 		;get pixel address and mask
+ F8E5  8A 46 00 			mov	al,[bp].RAL		;recover pixel to be written
+ F8E8  A8 80				test	al,80h			;check if "xor" bit on
+ F8EA  75 0F				jnz	xor_pixel
+
+ F8EC  22 C4				and	al,ah			;mask non-significant bits
+ F8EE  D3 E0				shl	ax,cl			;pos pixel and mask bits
+ F8F0  F6 D4				not	ah			;clear old pixel from byte
+ F8F2  26: 22 27			and	ah,es:[bx]
+ F8F5  0A C4				or	al,ah			;set new pixel in byte
+ F8F7  26: 88 07			mov	es:[bx],al		;and write back to screen
+ F8FA  C3				ret
+
+ F8FB				xor_pixel:
+ F8FB  22 C4				and	al,ah			;mask non-significant bits
+ F8FD  D2 E0				shl	al,cl			;position pixel bits
+ F8FF  26: 30 07			xor	es:[bx],al		;xor them into screen
+ F902  C3				ret
+
+ F903				get_pixel:
+ F903  E8 F911 R			call	pixaddr 		;get pixel address and mask
+ F906  26: 8A 07			mov	al,es:[bx]		;read pixel byte
+ F909  D2 E8				shr	al,cl			;right rustify pixel
+ F90B  22 C4				and	al,ah			;isolate pixel bits
+ F90D  88 46 00 			mov	[bp].RAL,al		;return pixel in AL
+ F910  C3				ret
+
+
+
+				; calc address and mask for pixel
+				;
+				;	entry:	DX = raster (0..199),
+				;		CX = pixel  (0..319 or 0..639)
+				;
+				;	exit:	ES:BX = ptr to byte containing pixel
+				;		CL = shift factor
+				;		CH = pixel mask, right justified
+				;		AX,DX destroyed.
+
+ F911				pixaddr:
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-54
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+ F911  B8 B800				mov	ax,0B800h		;get screen base
+ F914  8E C0				mov	es,ax
+
+ F916  D1 EA				shr	dx,1			;calc raster offset
+ F918  9C				pushf				;save psw.c (set if odd raster)
+ F919  B0 50				mov	al,80			;addr of start of raster
+ F91B  F6 E2				mul	dl
+ F91D  9D				popf				;recall psw.c
+ F91E  73 03				jnc	pix1			;skip if even raster
+ F920  05 2000				add	ax,2000h		;bias offset for odd raster
+ F923  8B D8			pix1:	mov	bx,ax
+
+ F925  8B C1				mov	ax,cx			;get copy of pixel within raster
+ F927  D1 E8				shr	ax,1			;start calc byte of raster
+ F929  D1 E8				shr	ax,1
+ F92B  F6 D1				not	cl
+
+ F92D  80 3E 0000 E 06			cmp	crt_mode,6		;check if hi-res
+ F932  74 0A				je	pix2
+
+					;medium res: 2 bit pixels
+
+ F934  03 D8				add	bx,ax			;es:bx = ptr to byte in screen
+ F936  80 E1 03 			and	cl,3			;pixel pos within raster byte
+ F939  D0 E1				shl	cl,1			;..by 2 bits
+ F93B  B4 03				mov	ah,3
+ F93D  C3				ret
+
+					;high res: 1 bit pixels
+ F93E				pix2:
+ F93E  D1 E8				shr	ax,1			;one more time
+ F940  03 D8				add	bx,ax			;es:bx = ptr to byte in screen
+ F942  80 E1 07 			and	cl,7			;pixel pos within raster byte
+ F945  B4 01				mov	ah,1
+
+ F947  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-55
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	READ_LPEN  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+
+ F948				READ_LPEN:
+ F948  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-56
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	BEEP  --							*
+				;*									*
+				;************************************************************************
+
+					assume	cs:Code, ds:RDP, es:nothing
+ F949				BEEP:
+
+ F949  B0 B6				mov	al,0B6h 		;timer 2, msb, lsb, binary
+ F94B  E6 43				out	timer+3,al
+ F94D  B0 00				mov	al,low BELLFREQ 	;set timer 2's frequency
+ F94F  E6 42				out	timer+2,al
+ F951  B0 05				mov	al,high BELLFREQ
+ F953  E6 42				out	timer+2,al
+
+ F955  E4 61				in	al,portb		;save curr control port setting
+ F957  50				push	ax			;save it
+ F958  0C 03				or	al,3			;gate speaker timer, enable speaker
+ F95A  E6 61				out	portb,al
+
+ F95C  B8 0002				mov	ax,BELLCNT		;count for bell length
+ F95F  33 C9				xor	cx,cx
+ F961  E2 FE			beep1:	loop	beep1			;wait awhile...
+ F963  48				dec	ax			;check if done
+ F964  75 FB				jnz	beep1			;wait some more
+
+ F966  58				pop	ax			;restore control port
+ F967  E6 61				out	portb,al
+
+ F969  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-57
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+					page
+				;************************************************************************
+				;*									*
+				;*	Dev_Init  --							*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	This routine is called to initialize the video driver's state.	*
+				;*	It sets up the drivers interrupt vectors (10h and 1Eh), and	*
+				;*	sets the video mode per the equipment vector.			*
+				;*									*
+				;*	Entry:	None.							*
+				;*									*
+				;*	Exit:	None.  All registers preserved. 			*
+				;*									*
+				;************************************************************************
+
+ F96A				Dev_Init:
+
+ F96A  1E				push	ds			;save caller's ds
+ F96B  50				push	ax
+
+ F96C  33 C0				xor	ax,ax			;address interrupt vector
+ F96E  8E D8				mov	ds,ax
+
+									;set video driver interrupt vector
+ F970  C7 06 0040 F065 R		mov	ds:word ptr[4*VIDEO_INT],offset video_entry
+ F976  8C 0E 0042			mov	ds:word ptr[4*VIDEO_INT+2],cs
+
+									;set video parameters interrupt vector
+ F97A  C7 06 0074 F0A4 R		mov	ds:word ptr[4*PARMS_INT],offset video_parms
+ F980  8C 0E 0076			mov	ds:word ptr[4*PARMS_INT+2],cs
+
+									;set ext character set interrupt vector
+ F984  C7 06 007C 0000			mov	ds:word ptr[4*CHSET_INT],chset_ext
+ F98A  C7 06 007E F000			mov	ds:word ptr[4*CHSET_INT+2],CHSET_SEG
+
+ F990  B8 ---- R			mov	ax,seg RDP		;address rom data page
+ F993  8E D8				mov	ds,ax
+					assume	ds:RDP
+
+ F995  8A 26 0000 E			mov	ah,byte ptr equip_vect	;get equip vector video bits
+ F999  25 3000				and	ax,3000h		;isolate video bits
+ F99C  74 12				jz	initx			;no video, CALL RS232 HERE!! hsp
+
+ F99E  80 FC 10 			cmp	ah,10h			;test if 40x25 color
+ F9A1  74 09				je	init			;mode 0
+
+ F9A3  B0 03				mov	al,3			;use mode 3...
+ F9A5  80 FC 20 			cmp	ah, 20h 		; ...for 80x25 color hsp
+ F9A8  74 02				je	init			; hsp
+
+ F9AA  B0 07				mov	al, 7			; use mode 7 for 80x25 B/W hsp
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-58
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				ROMCRT -	video driver
+
+
+ F9AC				init:
+ F9AC  B4 00				mov	ah,0			;init function
+ F9AE  CD 10				int	10h			;call driver
+
+ F9B0				initx:
+ F9B0  58				pop	ax
+ F9B1  1F				pop	ds
+
+ F9B2  C3				ret
+
+ F9B3				Code	ends
+					end
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-1
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+
+
+					page ,132
+					title GOUPIL4 PC compatible Rom I/O System
+					subttl TOD - time-of-day driver and character generator set
+
+				;*.
+				;************************************************************************
+				;*									*
+				;*	TOD -- support for interval timer and calendar/clock H/W	*
+				;*									*
+				;*	  DATE	  RELEASE		COMMENT 			*
+				;*	--------  -------     -------------------------------------	*
+				;*									*
+				;************************************************************************
+				;*.
+
+				Cgroup	group	code
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-2
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		Publics & Externals					*
+				;*									*
+				;************************************************************************
+
+ 0000				IVT	segment at 0
+ 0000				IVT	ends
+
+				public	Dev_Init
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-3
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		Definitions						*
+				;*									*
+				;************************************************************************
+			     C	INCLUDE DEFINES.DEF
+ = 0000 		     C	B		equ	byte ptr 0
+ = 0000 		     C	W		equ	word ptr 0
+ = 0000 		     C	P		equ	dword ptr 0
+			     C
+ = 0000 		     C	LB		equ	byte ptr 0
+ = 0001 		     C	HB		equ	byte ptr 1
+ = 0000 		     C	LW		equ	word ptr 0
+ = 0002 		     C	HW		equ	word ptr 2
+ = 0002 		     C	SEL		equ	word ptr 2
+ = 0000 		     C	OFF		equ	word ptr 0
+			     C
+ = 0000 		     C	NULL		equ	0
+ = 0000 		     C	FALSE		equ	0
+ =-0001 		     C	TRUE		equ	(not false)
+ = 0000 		     C	E_OK		equ	0
+			     C	INCLUDE PC.DEF
+			     C	DSEG	macro	seg, text, reg
+			     C	assume	DS:seg
+			     C		mov	reg, seg
+			     C		mov	ds, reg
+			     C	endm
+			     C
+ =			     C	jc	equ	jb
+ =			     C	jnc	equ	jnb
+			     C
+			     C	clr	macro	reg
+			     C		xor	reg,reg
+			     C	endm
+			     C
+			     C	jmps	macro	add
+			     C		jmp	short	add
+			     C	endm
+			     C
+			     C	pushE	macro		; save (everything) onto stack
+			     C		push	ax
+			     C		push	bx
+			     C		push	cx
+			     C		push	dx
+			     C		push	si
+			     C		push	di
+			     C		push	bp
+			     C		push	ds
+			     C		push	es
+			     C	endm
+			     C
+			     C	popE	macro		; restore (everything) from stack
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-4
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+			     C		pop	es
+			     C		pop	ds
+			     C		pop	bp
+			     C		pop	di
+			     C		pop	si
+			     C		pop	dx
+			     C		pop	cx
+			     C		pop	bx
+			     C		pop	ax
+			     C	endm
+			     C	Regs	struc		; register layout on stack
+ 0000  ????		     C		RES	dw	?
+ 0002  ????		     C		RDS	dw	?
+ 0004  ????		     C		RBP	dw	?
+ 0006  ????		     C		RDI	dw	?
+ 0008  ????		     C		RSI	dw	?
+ 000A  ????		     C		RDX	dw	?
+ 000C  ????		     C		RCX	dw	?
+ 000E  ????		     C		RBX	dw	?
+ 0010  ????		     C		RAX	dw	?
+ 0012			     C	Regs	ends
+			     C
+			     C	include macros.inc
+			     C
+			     C	morg	macro	 arg1  ;overlap detection macro
+			     C		if1
+			     C		if $ gt arg1
+			     C		%out morg arg1 overlapping something!!!
+			     C		endif
+			     C		endif
+			     C		org arg1
+			     C		endm
+			     C
+			     C	link	macro	arg1,arg2	;set and print binlink info
+			     C		if1
+			     C		.radix	16
+			     C		outmsg	cut,arg1,%(arg2)
+			     C		outmsg	binlink,arg1,%(arg2-0c000h)
+			     C		.radix	10
+			     C		endif
+			     C		org	arg2
+			     C		endm
+			     C
+			     C	outmsg	macro	arg1,arg2,arg3
+			     C		%out arg1 arg2 to arg3
+			     C		endm
+			     C
+			     C	INCLUDE RDP.EXT
+			     C	;-------------------- ROM Data Page definitions
+			     C
+			     C	set_RDP macro reg
+			     C	Dseg	RDP using reg
+			     C	endm
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-5
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+			     C
+ 0000			     C	RDP	segment at 40h			; ROM Data Page
+			     C
+			     C	; system configuration
+			     C
+			     C	extrn	ser_base	: word		; base port addrs for serial comm
+			     C	extrn	par_base	: word		; base port addrs for parallel
+			     C
+			     C	extrn	equip_vect	: word		; system equipment vector
+			     C	extrn	top_memory	: word		; memory size, in 1K increments
+			     C
+			     C	; keyboard data
+			     C
+			     C	extrn	kb_state1	: byte		; keyboard current state
+			     C	extrn	kb_state2	: byte		; more keyboard state
+			     C	extrn	kb_keycode	: byte		; kb input via alted keypad
+			     C
+			     C	extrn	kb_head 	: word		; head ptr of keyboard buffer
+			     C	extrn	kb_tail 	: word		; tail of keyboard buffer
+			     C	extrn	kb_buffer	: word		; keyboard buffer area
+			     C	extrn	kb_buff_last	: byte		; end of keyboard buffer
+			     C
+			     C	; diskette data
+			     C
+			     C	extrn	fd_seek 	: byte		; drive recalibration flags
+			     C	extrn	fd_motor	: byte		; motor status
+			     C	extrn	fd_timeout	: byte		; motor off timeout count
+			     C
+			     C	extrn	fd_result	: byte		; result code for previous operation
+			     C	extrn	fd_status	: byte		; status bytes from floppy controller
+			     C
+			     C	; video display data
+			     C
+			     C	extrn	crt_mode	: byte		; current display mode
+			     C	extrn	crt_cols	: word		; curr screen columns
+			     C	extrn	crt_regen_leng	: word		; length of regen buffer, in bytes
+			     C	extrn	crt_regen_base	: word		; base of regen buffer
+			     C
+			     C	extrn	crt_curs_pos	: word		; cursor locations for text pages
+			     C	extrn	crt_curs_attrs	: word		; cursor attributes
+			     C	extrn	crt_curr_page	: byte		; current display page
+			     C
+			     C	extrn	crt_iobase	: word		; crt controller port addr
+			     C	extrn	crt_mode_reg	: byte		; copy of curr mode register setting
+			     C	extrn	crt_palette	: byte		; copy of curr palette reg setting
+			     C
+			     C	; tod timer data
+			     C
+			     C	extrn	tmr_counter	: dword 	; timer tick counter
+			     C	extrn	tmr_overflow	: byte		; 24 hour overflow
+			     C
+			     C	; system data area
+			     C
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-6
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+			     C	extrn	break_flag	: byte		; bit 7 set on break key event
+			     C	extrn	reset_flag	: word		; set to 4147h on warm boot
+			     C
+			     C	; hard disk area
+			     C
+			     C	extrn	hd_status	: byte
+			     C	extrn	n_drives	: byte
+			     C	extrn	hd_flags	: byte
+			     C	extrn	hd_cbits	: byte
+			     C
+			     C	; printer/serial data
+			     C
+			     C	extrn	par_timeout	: byte		; timeout for parallel ports
+			     C	extrn	ser_timeout	: byte		; timeouts for rs232 ports
+			     C
+			     C	; auxilary keyboard data area
+			     C
+			     C	extrn	kb_buff_start	: word		; ptr to start of kb buffer
+			     C	extrn	kb_buff_end	: word		; ptr to end of kb buffer
+			     C
+ 0000			     C	RDP ends
+
+				; defines for GOUPIL4 calendar/clock code
+ = 0062 			PARPTC	equ	62h
+ = 03BC 			CALDAT	equ	03BCh
+ = 03BD 			CALCTL	equ	CALDAT+1
+ = 03BE 			CALINP	equ	CALDAT+2
+
+ = 0001 			CWRITE	equ	1
+ = 0002 			CREAD	equ	2
+ = 0004 			CSELECT equ	4
+ = 0010 			CADDRW	equ	10h
+ = 0080 			CINPUT	equ	80h
+
+				;************************************************************************
+				;*									*
+				;*		Set and print binary link offset (macro)		*
+				;*									*
+				;************************************************************************
+
+ 0000				code	segment public byte
+				assume	cs:CGROUP
+
+				    link	romtod,0f9c0h
+ F9C0			      + 	org	0f9c0h
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-7
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		DEV_Init public 					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	PC Keyboard driver initialization				*
+				;*									*
+				;*	ENTRY:	none							*
+				;*	EXIT:	none							*
+				;*									*
+				;*	MODIFIES:	Interrupt Vector at 0:68h			*
+				;*			All GP registers				*
+				;*									*
+				;************************************************************************
+
+ F9C0				Dev_Init:
+ F9C0  9C				pushf				; no interrupts allowed
+ F9C1  FA				cli
+
+ F9C2  1E				push	ds			; DS is used
+				Dseg	IVT using ax
+ F9C3  B8 ---- R	      + 	mov	ax, IVT
+ F9C6  8E D8		      + 	mov	ds, ax
+
+				;------ set up related IVT's ---------
+
+ F9C8  C7 06 0068 FE6E R		mov	IVT:[1Ah*4].LW, offset Cgroup:TOD_RIOS_entry ; TOD RIOS entry
+ F9CE  8C 0E 006A			mov	IVT:[1Ah*4].HW, cs
+
+ F9D2  C7 06 0020 FEA5 R		mov	IVT:[08h*4].LW, offset Cgroup:interval_timer ; interval timer
+ F9D8  8C 0E 0022			mov	IVT:[08h*4].HW, cs
+
+				    set_RDP	ax
+ F9DC  B8 ---- R	      + 	mov	ax, RDP
+ F9DF  8E D8		      + 	mov	ds, ax
+					clr	ax
+ F9E1  33 C0		      + 	xor	ax,ax
+ F9E3  A3 0000 E			mov	Tmr_Counter.LW,ax
+ F9E6  A3 0002 E			mov	Tmr_Counter.HW,ax
+ F9E9  A2 0000 E			mov	Tmr_Overflow, al
+
+ F9EC  1F				pop	ds
+ F9ED  9D				popf				; restore interrupt state
+ F9EE  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-8
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_Timer (public)					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*									*
+				;*									*
+				;*	ENTRY:	none							*
+				;*									*
+				;*	EXIT:	none							*
+				;*									*
+				;*	MODIFIES:							*
+				;*									*
+				;************************************************************************
+ F9EF				FD_Timer:
+ F9EF  50				push	ax
+ F9F0  52				push	dx
+ F9F1  1E				push	ds
+
+				    set_RDP	ax
+ F9F2  B8 ---- R	      + 	mov	ax, RDP
+ F9F5  8E D8		      + 	mov	ds, ax
+
+ F9F7  FF 06 0000 E			inc	Tmr_Counter.LW
+ F9FB  75 04				jne	fdt_10
+ F9FD  FF 06 0002 E			inc	Tmr_Counter.HW
+ FA01				fdt_10:
+ FA01  83 3E 0002 E 18			cmp	Tmr_Counter.HW,24	; 1193180/65536 * 24*60*60 / 65536
+ FA06  72 16				jb	fdt_30
+ FA08  77 08				ja	fdt_20
+
+ FA0A  81 3E 0000 E 00B0		cmp	Tmr_Counter.LW,176	; 1193180/65536 * 24*60*60 MOD 65536
+ FA10  72 0C				jb	fdt_30
+ FA12				fdt_20:
+					clr	ax
+ FA12  33 C0		      + 	xor	ax,ax
+ FA14  A3 0000 E			mov	Tmr_Counter.LW,ax
+ FA17  A3 0002 E			mov	Tmr_Counter.HW,ax
+ FA1A  FE 06 0000 E			inc	Tmr_Overflow
+ FA1E				fdt_30:
+ FA1E  80 26 0000 E FF			and	FD_Timeout,0FFh
+ FA23  74 0E				je	fdt_50
+
+ FA25  FE 0E 0000 E			dec	FD_Timeout
+ FA29  75 08				jne	fdt_50
+
+ FA2B  E8 FA39 R			call	FD_Motor_Off
+ FA2E  80 26 0000 E F0			and	FD_Motor, 0F0h
+ FA33				fdt_50:
+ FA33  CD 1C				int	1Ch
+ FA35  1F				pop	ds
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-9
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FA36  5A				pop	dx
+ FA37  58				pop	ax
+ FA38  C3				ret
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-10
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		FD_Motor_Off  public					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	turn off all floppy disk motors 				*
+				;*									*
+				;*	ENTRY:	(none)							*
+				;*	EXIT:	(none)							*
+				;*	MODIFIES:   All GP registers					*
+				;*									*
+				;************************************************************************
+ FA39				FD_Motor_Off:
+ FA39  B0 0C				mov	al, 0Ch 		; all drives off & disabled
+ FA3B  BA 03F2				mov	dx, 03F2h
+ FA3E  EE				out	dx,al
+
+ FA3F  C3				ret
+
+				;************************************************************************
+				;*
+				;*		PC compatible org'd character generator set
+				;*
+				;************************************************************************
+
+					morg	0fa6eh
+ FA6E			      + 	org 0fa6eh
+
+ FA6E				CHRGEN	label byte
+ FA6E  00 00 00 00 00 00		DB	000H,000H,000H,000H,000H,000H,000H,000H ;00
+       00 00
+ FA76  7E 81 A5 81 BD 99		DB	07EH,081H,0A5H,081H,0BDH,099H,081H,07EH ;01
+       81 7E
+ FA7E  7E FF DB FF C3 E7		DB	07EH,0FFH,0DBH,0FFH,0C3H,0E7H,0FFH,07EH ;02
+       FF 7E
+ FA86  6C FE FE FE 7C 38		DB	06CH,0FEH,0FEH,0FEH,07CH,038H,010H,000H ;03
+       10 00
+ FA8E  10 38 7C FE 7C 38		DB	010H,038H,07CH,0FEH,07CH,038H,010H,008H ;04
+       10 08
+ FA96  38 7C 38 FE FE 7C		DB	038H,07CH,038H,0FEH,0FEH,07CH,038H,07CH ;05
+       38 7C
+ FA9E  10 10 38 7C FE 7C		DB	010H,010H,038H,07CH,0FEH,07CH,038H,07CH ;06
+       38 7C
+ FAA6  00 00 18 3C 3C 18		DB	000H,000H,018H,03CH,03CH,018H,000H,000H ;07
+       00 00
+ FAAE  FF FF E7 C3 C3 E7		DB	0FFH,0FFH,0E7H,0C3H,0C3H,0E7H,0FFH,0FFH ;08
+       FF FF
+ FAB6  00 3C 66 42 42 66		DB	000H,03CH,066H,042H,042H,066H,03CH,000H ;09
+       3C 00
+ FABE  FF C3 99 BD BD 99		DB	0FFH,0C3H,099H,0BDH,0BDH,099H,0C3H,0FFH ;0A
+       C3 FF
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-11
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FAC6  0F 07 0F 7D CC CC		DB	00FH,007H,00FH,07DH,0CCH,0CCH,0CCH,078H ;0B
+       CC 78
+ FACE  3C 66 66 66 3C 18		DB	03CH,066H,066H,066H,03CH,018H,07EH,018H ;0C
+       7E 18
+ FAD6  3F 33 3F 30 30 70		DB	03FH,033H,03FH,030H,030H,070H,0F0H,0E0H ;0D
+       F0 E0
+ FADE  7F 63 7F 63 63 67		DB	07FH,063H,07FH,063H,063H,067H,0E6H,0C0H ;0E
+       E6 C0
+ FAE6  99 5A 3C 7E 7E 3C		DB	099H,05AH,03CH,07EH,07EH,03CH,05AH,099H ;0F
+       5A 99
+				;-------------------------------------
+ FAEE  80 E0 F8 FE F8 E0		DB	080H,0E0H,0F8H,0FEH,0F8H,0E0H,080H,000H ;10
+       80 00
+ FAF6  02 0E 3E FE 3E 0E		DB	002H,00EH,03EH,0FEH,03EH,00EH,002H,000H ;11
+       02 00
+ FAFE  18 3C 7E 18 18 7E		DB	018H,03CH,07EH,018H,018H,07EH,03CH,018H ;12
+       3C 18
+ FB06  66 66 66 66 66 00		DB	066H,066H,066H,066H,066H,000H,066H,000H ;13
+       66 00
+ FB0E  7F DB DB 7B 1B 1B		DB	07FH,0DBH,0DBH,07BH,01BH,01BH,01BH,000H ;14
+       1B 00
+ FB16  3E 63 38 6C 6C 38		DB	03EH,063H,038H,06CH,06CH,038H,0CCH,078H ;15
+       CC 78
+ FB1E  00 00 00 00 7E 7E		DB	000H,000H,000H,000H,07EH,07EH,07EH,000H ;16
+       7E 00
+ FB26  18 3C 7E 18 7E 3C		DB	018H,03CH,07EH,018H,07EH,03CH,018H,0FFH ;17
+       18 FF
+ FB2E  18 3C 7E 18 18 18		DB	018H,03CH,07EH,018H,018H,018H,018H,000H ;18
+       18 00
+ FB36  18 18 18 18 7E 3C		DB	018H,018H,018H,018H,07EH,03CH,018H,000H ;19
+       18 00
+ FB3E  00 18 0C FE 0C 18		DB	000H,018H,00CH,0FEH,00CH,018H,000H,000H ;1A
+       00 00
+ FB46  00 30 60 FE 60 30		DB	000H,030H,060H,0FEH,060H,030H,000H,000H ;1B
+       00 00
+ FB4E  00 00 C0 C0 C0 FE		DB	000H,000H,0C0H,0C0H,0C0H,0FEH,000H,000H ;1C
+       00 00
+ FB56  00 24 66 FF 66 24		DB	000H,024H,066H,0FFH,066H,024H,000H,000H ;1D
+       00 00
+ FB5E  00 18 3C 7E FF FF		DB	000H,018H,03CH,07EH,0FFH,0FFH,000H,000H ;1E
+       00 00
+ FB66  00 FF FF 7E 3C 18		DB	000H,0FFH,0FFH,07EH,03CH,018H,000H,000H ;1F
+       00 00
+				;---------------------------------
+ FB6E  00 00 00 00 00 00		DB	000H,000H,000H,000H,000H,000H,000H,000H ;20 SPACE
+       00 00
+ FB76  30 78 78 30 30 00		DB	030H,078H,078H,030H,030H,000H,030H,000H ;21 !
+       30 00
+ FB7E  6C 6C 6C 00 00 00		DB	06CH,06CH,06CH,000H,000H,000H,000H,000H ;22 "
+       00 00
+ FB86  6C 6C FE 6C FE 6C		DB	06CH,06CH,0FEH,06CH,0FEH,06CH,06CH,000H ;23 #
+       6C 00
+ FB8E  30 7C C0 78 0C F8		DB	030H,07CH,0C0H,078H,00CH,0F8H,030H,000H ;24 $
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-12
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+       30 00
+ FB96  00 C6 CC 18 30 66		DB	000H,0C6H,0CCH,018H,030H,066H,0C6H,000H ;25 %
+       C6 00
+ FB9E  38 6C 38 76 DC CC		DB	038H,06CH,038H,076H,0DCH,0CCH,076H,000H ;26 &
+       76 00
+ FBA6  60 60 C0 00 00 00		DB	060H,060H,0C0H,000H,000H,000H,000H,000H ;27 QUOTE
+       00 00
+ FBAE  18 30 60 60 60 30		DB	018H,030H,060H,060H,060H,030H,018H,000H ;28 (
+       18 00
+ FBB6  60 30 18 18 18 30		DB	060H,030H,018H,018H,018H,030H,060H,000H ;29 )
+       60 00
+ FBBE  00 66 3C FF 3C 66		DB	000H,066H,03CH,0FFH,03CH,066H,000H,000H ;2A *
+       00 00
+ FBC6  00 30 30 FC 30 30		DB	000H,030H,030H,0FCH,030H,030H,000H,000H ;2B +
+       00 00
+ FBCE  00 00 00 00 00 30		DB	000H,000H,000H,000H,000H,030H,030H,060H ;2C ;
+       30 60
+ FBD6  00 00 00 FC 00 00		DB	000H,000H,000H,0FCH,000H,000H,000H,000H ;2D -
+       00 00
+ FBDE  00 00 00 00 00 30		DB	000H,000H,000H,000H,000H,030H,030H,000H ;2E .
+       30 00
+ FBE6  06 0C 18 30 60 C0		DB	006H,00CH,018H,030H,060H,0C0H,080H,000H ;2F /
+       80 00
+				;-------------------------------------
+ FBEE  7C C6 CE DE F6 E6		DB	07CH,0C6H,0CEH,0DEH,0F6H,0E6H,07CH,000H ;30 0
+       7C 00
+ FBF6  30 70 30 30 30 30		DB	030H,070H,030H,030H,030H,030H,0FCH,000H ;31 1
+       FC 00
+ FBFE  78 CC 0C 38 60 CC		DB	078H,0CCH,00CH,038H,060H,0CCH,0FCH,000H ;32 2
+       FC 00
+ FC06  78 CC 0C 38 0C CC		DB	078H,0CCH,00CH,038H,00CH,0CCH,078H,000H ;33 3
+       78 00
+ FC0E  1C 3C 6C CC FE 0C		DB	01CH,03CH,06CH,0CCH,0FEH,00CH,01EH,000H ;34 4
+       1E 00
+ FC16  FC C0 F8 0C 0C CC		DB	0FCH,0C0H,0F8H,00CH,00CH,0CCH,078H,000H ;35 5
+       78 00
+ FC1E  38 60 C0 F8 CC CC		DB	038H,060H,0C0H,0F8H,0CCH,0CCH,078H,000H ;36 6
+       78 00
+ FC26  FC CC 0C 18 30 30		DB	0FCH,0CCH,00CH,018H,030H,030H,030H,000H ;37 7
+       30 00
+ FC2E  78 CC CC 78 CC CC		DB	078H,0CCH,0CCH,078H,0CCH,0CCH,078H,000H ;38 8
+       78 00
+ FC36  78 CC CC 7C 0C 18		DB	078H,0CCH,0CCH,07CH,00CH,018H,070H,000H ;39 9
+       70 00
+ FC3E  00 30 30 00 00 30		DB	000H,030H,030H,000H,000H,030H,030H,000H ;3A :
+       30 00
+ FC46  00 30 30 00 00 30		DB	000H,030H,030H,000H,000H,030H,030H,060H ;3B ;
+       30 60
+ FC4E  18 30 60 C0 60 30		DB	018H,030H,060H,0C0H,060H,030H,018H,000H ;3C <
+       18 00
+ FC56  00 00 FC 00 00 FC		DB	000H,000H,0FCH,000H,000H,0FCH,000H,000H ;3D =
+       00 00
+ FC5E  60 30 18 0C 18 30		DB	060H,030H,018H,00CH,018H,030H,060H,000H ;3E >
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-13
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+       60 00
+ FC66  78 CC 0C 18 30 00		DB	078H,0CCH,00CH,018H,030H,000H,030H,000H ;3F ?
+       30 00
+				;--------------------------------------
+ FC6E  7C C6 DE DE DE C0		DB	07CH,0C6H,0DEH,0DEH,0DEH,0C0H,078H,000H ;40 @
+       78 00
+ FC76  30 78 CC CC FC CC		DB	030H,078H,0CCH,0CCH,0FCH,0CCH,0CCH,000H ;41 A
+       CC 00
+ FC7E  FC 66 66 7C 66 66		DB	0FCH,066H,066H,07CH,066H,066H,0FCH,000H ;42 B
+       FC 00
+ FC86  3C 66 C0 C0 C0 66		DB	03CH,066H,0C0H,0C0H,0C0H,066H,03CH,000H ;43 C
+       3C 00
+ FC8E  F8 6C 66 66 66 6C		DB	0F8H,06CH,066H,066H,066H,06CH,0F8H,000H ;44 D
+       F8 00
+ FC96  FE 62 68 78 68 62		DB	0FEH,062H,068H,078H,068H,062H,0FEH,000H ;45 E
+       FE 00
+ FC9E  FE 62 68 78 68 60		DB	0FEH,062H,068H,078H,068H,060H,0F0H,000H ;46 F
+       F0 00
+ FCA6  3C 66 C0 C0 CE 66		DB	03CH,066H,0C0H,0C0H,0CEH,066H,03EH,000H ;47 G
+       3E 00
+ FCAE  CC CC CC FC CC CC		DB	0CCH,0CCH,0CCH,0FCH,0CCH,0CCH,0CCH,000H ;48 H
+       CC 00
+ FCB6  78 30 30 30 30 30		DB	078H,030H,030H,030H,030H,030H,078H,000H ;49 I
+       78 00
+ FCBE  1E 0C 0C 0C CC CC		DB	01EH,00CH,00CH,00CH,0CCH,0CCH,078H,000H ;4A J
+       78 00
+ FCC6  E6 66 6C 78 6C 66		DB	0E6H,066H,06CH,078H,06CH,066H,0E6H,000H ;4B K
+       E6 00
+ FCCE  F0 60 60 60 62 66		DB	0F0H,060H,060H,060H,062H,066H,0FEH,000H ;4C L
+       FE 00
+ FCD6  C6 EE FE FE D6 C6		DB	0C6H,0EEH,0FEH,0FEH,0D6H,0C6H,0C6H,000H ;4D M
+       C6 00
+ FCDE  C6 E6 F6 DE CE C6		DB	0C6H,0E6H,0F6H,0DEH,0CEH,0C6H,0C6H,000H ;4E N
+       C6 00
+ FCE6  38 6C C6 C6 C6 6C		DB	038H,06CH,0C6H,0C6H,0C6H,06CH,038H,000H ;4F O
+       38 00
+				;-------------------------------------
+ FCEE  FC 66 66 7C 60 60		DB	0FCH,066H,066H,07CH,060H,060H,0F0H,000H ;50 P
+       F0 00
+ FCF6  78 CC CC CC DC 78		DB	078H,0CCH,0CCH,0CCH,0DCH,078H,01CH,000H ;51 Q
+       1C 00
+ FCFE  FC 66 66 7C 6C 66		DB	0FCH,066H,066H,07CH,06CH,066H,0E6H,000H ;52 R
+       E6 00
+ FD06  78 CC E0 70 1C CC		DB	078H,0CCH,0E0H,070H,01CH,0CCH,078H,000H ;53 S
+       78 00
+ FD0E  FC B4 30 30 30 30		DB	0FCH,0B4H,030H,030H,030H,030H,078H,000H ;54 T
+       78 00
+ FD16  CC CC CC CC CC CC		DB	0CCH,0CCH,0CCH,0CCH,0CCH,0CCH,0FCH,000H ;55 U
+       FC 00
+ FD1E  CC CC CC CC CC 78		DB	0CCH,0CCH,0CCH,0CCH,0CCH,078H,030H,000H ;56 V
+       30 00
+ FD26  C6 C6 C6 C6 FE EE		DB	0C6H,0C6H,0C6H,0C6H,0FEH,0EEH,0C6H,000H ;57 W
+       C6 00
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-14
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FD2E  C6 C6 6C 38 38 6C		DB	0C6H,0C6H,06CH,038H,038H,06CH,0C6H,000H ;58 X
+       C6 00
+ FD36  CC CC CC 78 30 30		DB	0CCH,0CCH,0CCH,078H,030H,030H,078H,000H ;59 Y
+       78 00
+ FD3E  FE C6 8C 18 32 66		DB	0FEH,0C6H,08CH,018H,032H,066H,0FEH,000H ;5A Z
+       FE 00
+ FD46  78 60 60 60 60 60		DB	078H,060H,060H,060H,060H,060H,078H,000H ;5B [
+       78 00
+ FD4E  C0 60 30 18 0C 06		DB	0C0H,060H,030H,018H,00CH,006H,002H,000H ;5C \
+       02 00
+ FD56  78 18 18 18 18 18		DB	078H,018H,018H,018H,018H,018H,078H,000H ;5D ]
+       78 00
+ FD5E  10 38 6C C6 00 00		DB	010H,038H,06CH,0C6H,000H,000H,000H,000H ;5E ^
+       00 00
+ FD66  00 00 00 00 00 00		DB	000H,000H,000H,000H,000H,000H,000H,0FFH ;5F _
+       00 FF
+				;---------------------------------------
+ FD6E  30 30 18 00 00 00		DB	030H,030H,018H,000H,000H,000H,000H,000H ;60
+       00 00
+ FD76  00 00 78 0C 7C CC		DB	000H,000H,078H,00CH,07CH,0CCH,076H,000H ;61 a
+       76 00
+ FD7E  E0 60 60 7C 66 66		DB	0E0H,060H,060H,07CH,066H,066H,0DCH,000H ;62 b
+       DC 00
+ FD86  00 00 78 CC C0 CC		DB	000H,000H,078H,0CCH,0C0H,0CCH,078H,000H ;63 c
+       78 00
+ FD8E  1C 0C 0C 7C CC CC		DB	01CH,00CH,00CH,07CH,0CCH,0CCH,076H,000H ;64 d
+       76 00
+ FD96  00 00 78 CC FC C0		DB	000H,000H,078H,0CCH,0FCH,0C0H,078H,000H ;65 e
+       78 00
+ FD9E  38 6C 60 F0 60 60		DB	038H,06CH,060H,0F0H,060H,060H,0F0H,000H ;66 f
+       F0 00
+ FDA6  00 00 76 CC CC 7C		DB	000H,000H,076H,0CCH,0CCH,07CH,00CH,0F8H ;67 g
+       0C F8
+ FDAE  E0 60 6C 76 66 66		DB	0E0H,060H,06CH,076H,066H,066H,0E6H,000H ;68 h
+       E6 00
+ FDB6  30 00 70 30 30 30		DB	030H,000H,070H,030H,030H,030H,078H,000H ;69 i
+       78 00
+ FDBE  0C 00 0C 0C 0C CC		DB	00CH,000H,00CH,00CH,00CH,0CCH,0CCH,078H ;6A j
+       CC 78
+ FDC6  E0 60 66 6C 78 6C		DB	0E0H,060H,066H,06CH,078H,06CH,0E6H,000H ;6B k
+       E6 00
+ FDCE  70 30 30 30 30 30		DB	070H,030H,030H,030H,030H,030H,078H,000H ;6C l
+       78 00
+ FDD6  00 00 CC FE FE D6		DB	000H,000H,0CCH,0FEH,0FEH,0D6H,0C6H,000H ;6D m
+       C6 00
+ FDDE  00 00 F8 CC CC CC		DB	000H,000H,0F8H,0CCH,0CCH,0CCH,0CCH,000H ;6E n
+       CC 00
+ FDE6  00 00 78 CC CC CC		DB	000H,000H,078H,0CCH,0CCH,0CCH,078H,000H ;6F o
+       78 00
+				;---------------------------------------
+ FDEE  00 00 DC 66 66 7C		DB	000H,000H,0DCH,066H,066H,07CH,060H,0F0H ;70 p
+       60 F0
+ FDF6  00 00 76 CC CC 7C		DB	000H,000H,076H,0CCH,0CCH,07CH,00CH,01EH ;71 q
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-15
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+       0C 1E
+ FDFE  00 00 DC 76 66 60		DB	000H,000H,0DCH,076H,066H,060H,0F0H,000H ;72 r
+       F0 00
+ FE06  00 00 7C C0 78 0C		DB	000H,000H,07CH,0C0H,078H,00CH,0F8H,000H ;73 s
+       F8 00
+ FE0E  10 30 7C 30 30 34		DB	010H,030H,07CH,030H,030H,034H,018H,000H ;74 t
+       18 00
+ FE16  00 00 CC CC CC CC		DB	000H,000H,0CCH,0CCH,0CCH,0CCH,076H,000H ;75 u
+       76 00
+ FE1E  00 00 CC CC CC 78		DB	000H,000H,0CCH,0CCH,0CCH,078H,030H,000H ;76 v
+       30 00
+ FE26  00 00 C6 D6 FE FE		DB	000H,000H,0C6H,0D6H,0FEH,0FEH,06CH,000H ;77 w
+       6C 00
+ FE2E  00 00 C6 6C 38 6C		DB	000H,000H,0C6H,06CH,038H,06CH,0C6H,000H ;78 x
+       C6 00
+ FE36  00 00 CC CC CC 7C		DB	000H,000H,0CCH,0CCH,0CCH,07CH,00CH,0F8H ;79 y
+       0C F8
+ FE3E  00 00 FC 98 30 64		DB	000H,000H,0FCH,098H,030H,064H,0FCH,000H ;7A z
+       FC 00
+ FE46  1C 30 30 E0 30 30		DB	01CH,030H,030H,0E0H,030H,030H,01CH,000H ;7B
+       1C 00
+ FE4E  18 18 18 00 18 18		DB	018H,018H,018H,000H,018H,018H,018H,000H ;7C
+       18 00
+ FE56  E0 30 30 1C 30 30		DB	0E0H,030H,030H,01CH,030H,030H,0E0H,000H ;7D
+       E0 00
+ FE5E  76 DC 00 00 00 00		DB	076H,0DCH,000H,000H,000H,000H,000H,000H ;7E
+       00 00
+ FE66  00 10 38 6C C6 C6		DB	000H,010H,038H,06CH,0C6H,0C6H,0FEH,000H ;7F
+       FE 00
+
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-16
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+				;************************************************************************
+				;*									*
+				;*		TOD_Rios public 					*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	Time of Day support for standard PC compatible timer &		*
+				;*	special GOUPIL4 calendar/clock H/W.  There are two set and two	*
+				;*	get functions as follows:					*
+				;*----------------------------------------------------------------------*
+				;*	ENTRY:	AH= 0	get 24 hour timer value 			*
+				;*	EXIT:	CX|DX=	32 bit time since midnight, in 55 msec units.	*
+				;*		AL=	number of times counter has passed midnight	*
+				;*			since last Fn0 or Fn1 call.			*
+				;*----------------------------------------------------------------------*
+				;*	ENTRY:	AH= 1	set 24 hour timer value 			*
+				;*		CX|DX=	32 bit time since midnight, in 55 msec units.	*
+				;*	EXIT:	none							*
+				;*----------------------------------------------------------------------*
+				;*	ENTRY:	AH= FEh get calendar/clock values.			*
+				;*	EXIT:	DL = year	(0..99) 				*
+				;*		CH = month	(1..12) 				*
+				;*		CL = day	(1..31) 				*
+				;*		BH = hours	(0..23) 				*
+				;*		BL = minutes	(0..59) 				*
+				;*		AL = seconds	(0..59) 				*
+				;*----------------------------------------------------------------------*
+				;*	ENTRY:	AH= FFh set calendar/clock values.			*
+				;*		DL = year	(0..99) 				*
+				;*		CH = month	(1..12) 				*
+				;*		CL = day	(1..31) 				*
+				;*		BH = hours	(0..23) 				*
+				;*		BL = minutes	(0..59) 				*
+				;*		AL = seconds	(0..59) 				*
+				;*	EXIT:	none							*
+				;*									*
+				;************************************************************************
+
+				;************************************************************************
+				;*
+				;*		PC compatible TOD entry
+				;*
+				;************************************************************************
+
+					morg	0fe6eh
+ FE6E			      + 	org 0fe6eh
+
+ FE6E				TOD_RIOS_entry:
+ FE6E  80 FC 01 			cmp	ah, 1			; check for standard timer functions
+ FE71  77 3C				ja	cal_rios		; special GOUPIL4 function for calendar H/W
+
+ FE73  53				push	bx
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-17
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FE74  1E				push	ds
+				    set_RDP	bx
+ FE75  BB ---- R	      + 	mov	bx, RDP
+ FE78  8E DB		      + 	mov	ds, bx
+ FE7A  74 13				je	tod_set 		; Fn 1, set
+
+ FE7C  8B 16 0000 E			mov	dx, Tmr_Counter.LW
+ FE80  8B 0E 0002 E			mov	cx, Tmr_Counter.HW
+ FE84  A0 0000 E			mov	al, Tmr_Overflow	; return timer values
+ FE87				tod_exit_zto:
+ FE87  C6 06 0000 E 00			mov	Tmr_Overflow, 0 	; clear midnight flag
+ FE8C				tod_exit:
+ FE8C  1F				pop	ds
+ FE8D  5B				pop	bx
+ FE8E				tod_out:
+ FE8E  CF				iret
+ FE8F				tod_set:				; set 24 hour timer
+ FE8F  89 16 0000 E			mov	Tmr_Counter.LW,dx
+ FE93  89 0E 0002 E			mov	Tmr_Counter.HW,cx
+ FE97  EB EE				jmp	tod_exit_zto
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-18
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				  page
+
+				;************************************************************************
+				;*
+				;*
+				;************************************************************************
+
+				;************************************************************************
+				;*									*
+				;*		interval_timer interrupt				*
+				;*									*
+				;************************************************************************
+				;*									*
+				;*	interval timer hardware interrupt service			*
+				;*									*
+				;*	ENTRY:	(none)							*
+				;*	EXIT:	(none)							*
+				;*									*
+				;************************************************************************
+
+				;************************************************************************
+				;*
+				;*		PC compatible org'd hardware timer interrupt
+				;*		(just barely snuck in here)
+				;*
+				;************************************************************************
+
+					morg	0fea5h
+ FEA5			      + 	org 0fea5h
+
+ FEA5				interval_timer:
+ FEA5  E8 F9EF R			call	FD_Timer		; timer dispatch
+
+ FEA8  50				push	ax
+ FEA9  B0 20				mov	al,20h			; EOI to PIC
+ FEAB  E6 20				out	20h,al
+ FEAD  58				pop	ax
+ FEAE  CF				iret
+
+ FEAF				cal_rios:				; calendar/clock chip support
+ FEAF  80 FC FE 			cmp	ah, 0FEh
+ FEB2  72 DA				jb	tod_out 		;invalid Func...
+									; save registers used
+ FEB4  06				push	es
+ FEB5  1E				push	ds
+ FEB6  55				push	bp
+ FEB7  56				push	si
+ FEB8  57				push	di
+									; switch registers for GOUPIL4 code
+ FEB9  8A E3				mov	ah,bl
+ FEBB  8A DF				mov	bl,bh
+ FEBD  B7 00				mov	bh,0			; day of week not used
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-19
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FEBF  52				push	dx
+ FEC0  51				push	cx
+ FEC1  53				push	bx
+ FEC2  50				push	ax
+									; set es to ss
+ FEC3  16				push	ss
+ FEC4  07				pop	es
+
+ FEC5  75 03				jne	cal_FF			; Set cal Fn
+ FEC7  EB 6A 90 			jmp	cal_FE			; Get cal Fn
+
+
+				;------ CAL RIOS Function FF (set) ---------
+ FECA				cal_FF:
+				;------------------------------------------
+				; WRITE CALENDAR ROUTINE.
+ FECA  B9 0064				mov	cx,100			;for time out
+				; BEGIN PROCEDURE
+ FECD				WRITEBEG:
+ FECD  FB				STI				;ENABLE INTERRUPTS
+ FECE  B3 00				MOV	BL,0			;STARTING REGISTER
+ FED0  8B F4				mov	si,sp			;SET DATA POINTER
+ FED2  FA				CLI				;DISABLE INTERRUPTS
+				; LOOP WITH READ/WRITE ENABLED
+ FED3				WRITELUP:
+ FED3  E8 FFBA R			CALL	GETBUZY 		;LECTURE DU BUSY BIT
+ FED6  E1 F5				loopZ	WRITEBEG		;NO. BR TO BEGIN
+ FED8  74 51				jz	write_exit		;CALENDAR NOT AVAILABLE
+				; GET DATA BYTE
+ FEDA  32 E4				XOR	AH,AH			;CLEAR
+ FEDC  26: 8A 04			MOV	AL,ES:[SI]		;GET BYTE FROM WORK AREA
+ FEDF  80 FB 06 			CMP	BL,6			;DAY OF THE WEEK?
+ FEE2  74 10				JE	WRITEDWK		;YES. BR WRITE DAY OF THE WEEK
+ FEE4  7F 07				JG	WRITEDT 		;GREATER=DATE
+				; WRITE TIME
+ FEE6  F6 C3 01 			TEST	BL,1			;ODD REGISTER?
+ FEE9  75 10				JNZ	WRITEHI 		;YES. BR TO WRITE TIME HIGH
+ FEEB  EB 08				JMP short WRITELO		;ELSE. BR TO WRITE LOW
+				; WRITE DATE
+ FEED  F6 C3 01 		WRITEDT:TEST	BL,1			;ODD REGISTER?
+ FEF0  75 03				JNZ	WRITELO 		;YES. BR TO WRITE DATE LOW
+ FEF2  EB 07				JMP short WRITEHI		;ELSE. BR TO WRITE HIGH
+				; WRITE DAY OF THE WEEK
+ FEF4				WRITEDWK:
+ FEF4  46				INC	SI			;ADVANCE INDEX
+				; WRITE LOW 4 BITS
+ FEF5				WRITELO:
+ FEF5  D4 0A				aam				;DIVIDE BY 10 (AH=div, AL=mod)
+ FEF7  8A F8				MOV	BH,al			;REMAINDER = DATA. HANG ON TO IT.
+ FEF9  EB 0D				JMP short WRITEEXE		;BR TO EXECUTE
+				; WRITE HIGH 4 BITS
+ FEFB				WRITEHI:
+ FEFB  46				INC	SI			;ADVANCE INDEX
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-20
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FEFC  D4 0A				aam				;DIVIDE BY 10 (AH=div, AL=mod)
+ FEFE  8A FC				MOV	BH,ah			;QUOTIENT = DATA. HANG ON TO IT.
+ FF00  80 FB 05 			CMP	BL,5			;HOURS HIGH?
+ FF03  75 03				JNE	WRITEEXE		;NO. BR TO EXECUTE
+ FF05  80 CF 08 			OR	BH,8			;INDICATE 24 HOURS CLOCK
+				; EXECUTE WRITE
+ FF08				WRITEEXE:
+ FF08  8A C3				MOV	AL,BL			;REGISTER NUMBER
+ FF0A  B2 BC				MOV	DL,LOW CALDAT
+ FF0C  EE				OUT	DX,AL
+				; SET WRITE HIGH
+ FF0D  B0 14				MOV	AL,CADDRW+CSELECT
+ FF0F  42				inc	dx	;MOV	DX,CALCTL
+ FF10  EE				OUT	DX,AL			;WRITE ADDRESS
+				; SET WRITE LOW
+ FF11  B0 04				MOV	AL,CSELECT
+							;MOV	DX,CALCTL
+ FF13  EE				OUT	DX,AL			;SET WRITE ADDRESS LOW
+				; SET VALUE
+ FF14  8A C7				MOV	AL,BH			;DATA VALUE
+ FF16  4A				dec	dx	;MOV	DX,CALDAT
+ FF17  EE				OUT	DX,AL
+				; SET WRITE HIGH
+ FF18  B0 05				MOV	AL,CWRITE+CSELECT
+ FF1A  42				inc	dx	;MOV	DX,CALCTL
+ FF1B  EE				OUT	DX,AL			;WRITE VALUE
+				; SET WRITE LOW
+ FF1C  B0 04				MOV	AL,CSELECT
+							;MOV	DX,CALCTL
+ FF1E  EE				OUT	DX,AL			;SET WRITE LOW
+				; TEST FOR END OF LOOP
+ FF1F  FE C3				INC	BL			;INCREMENT REGISTER
+ FF21  80 FB 0D 			CMP	BL,13			;ALL REGISTERS DONE?
+ FF24  7E AD				JLE	WRITELUP		;NO. REPEAT LOOP
+				; TEST IF READ/WRITE STILL ENABLED
+ FF26  E8 FFBA R			CALL	GETBUZY 		;GET CAL CHIP NOT BUSY LINE
+ FF29  E1 A2				loopz	WRITEBEG		;PROCEDURE NO GOOD. REDO IT.
+				; WRITE DONE
+ FF2B				write_exit:
+ FF2B  B0 00				MOV	AL,0
+ FF2D  B2 BD				MOV	DL,LOW CALCTL
+ FF2F  EE				OUT	DX,AL			;SET CHIP SELECT LOW
+ FF30  EB 78 90 			jmp	cal_exit
+
+
+				;------ CAL RIOS Function FE (get) ---------
+
+ FF33				cal_FE:
+
+				; BEGIN PROCEDURE
+ FF33  B9 0064				mov	cx,100
+ FF36  FB			READBEG:STI				;ENABLE INTERRUPTS
+ FF37  B3 00				MOV	BL,0			;STARTING REGISTER
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-21
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FF39  8B F4				mov	si,sp
+ FF3B  FA				CLI				;DISABLE INTERRUPTS
+				; LOOP WITH READ/WRITE ENABLED
+ FF3C				READLUP:
+ FF3C  E8 FFBA R			CALL GETBUZY			;GET CAL CHIP NOT BUSY LINE
+ FF3F  E1 F5				loopZ	READBEG 		;NO. BR TO BEGIN
+ FF41  74 63				jz	read_exit
+				; SET REGISTER NUMBER
+ FF43  8A C3				MOV	AL,BL			;REGISTER NUMBER
+ FF45  B2 BC				MOV	DL,LOW CALDAT
+ FF47  EE				OUT	DX,AL
+				; SET WRITE HIGH
+ FF48  B0 14				MOV	AL,CADDRW+CSELECT
+ FF4A  42				inc	dx	;MOV	DX,CALCTL
+ FF4B  EE				OUT	DX,AL			;WRITE ADDRESS
+				; SET WRITE LOW
+ FF4C  B0 04				MOV	AL,CSELECT
+							;MOV	DX,CALCTL
+ FF4E  EE				OUT	DX,AL			;SET WRITE ADDRESS LOW
+				; SET INPUT LATCH
+ FF4F  42				inc	dx	;MOV	DX,CALINP
+ FF50  B0 2C				mov	AL,2CH
+ FF52  EE				OUT	DX,AL			;DISABLE PRINTER LATCH
+				; SET READ HIGH
+ FF53  B0 86				MOV	AL,CREAD+CSELECT+CINPUT
+ FF55  4A				dec	dx	;MOV	DX,CALCTL
+ FF56  EE				OUT	DX,AL			;READ COMMAND
+				; READ DATA
+ FF57  51				push	cx
+ FF58  B9 0005				MOV	CX,5
+ FF5B  E2 FE			RDELAY: LOOP	RDELAY
+ FF5D  59				pop	cx
+ FF5E  4A				dec	dx	;MOV	DX,CALDAT
+ FF5F  EC				IN	AL,DX			;READ VALUE
+ FF60  24 0F				AND	AL,15			;ISOLATE LOW ORDER 4 BITS
+ FF62  80 FB 05 			CMP	BL,5			;HOURS HIGH?
+ FF65  75 02				JNE	STOREVA 		;NO. BR TO STORE VALUE
+ FF67  24 07				AND	AL,7			;ELSE. ELIMINATE 24 HOURS BIT
+ FF69  80 FB 06 		STOREVA:CMP	BL,6			;DAY OF THE WEEK?
+ FF6C  74 10				JE	STOREDW 		;YES. BR TO STORE DAY OF WEEK
+ FF6E  7F 07				JG	STOREDT 		;GREATER=DATE
+				; STORE TIME
+ FF70  F6 C3 01 			TEST	BL,1			;ODD REGISTER?
+ FF73  75 14				JNZ	STOREHI 		;YES. BR STORE HIGH
+ FF75  EB 0D				JMP short STORELO
+				; STORE DATE
+ FF77  F6 C3 01 		STOREDT:TEST	BL,1			;ODD REGISTER?
+ FF7A  75 08				JNZ	STORELO 		;YES. BR TO STORE LOW
+ FF7C  EB 0B				JMP short STOREHI
+				; STORE DAY OF THE WEEK
+ FF7E  26: 88 04		STOREDW:MOV	es:[SI],AL
+ FF81  46				INC	SI			;ADVANCE INDEX
+ FF82  EB 0D				JMP short READEND
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-22
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+				; STORE LOW 4 BITS
+ FF84  26: 88 04		STORELO:MOV	es:[SI],AL
+ FF87  EB 08				JMP short READEND
+				; STORE HIGH 4 BITS
+ FF89  B4 0A			STOREHI:mov	ah,10
+ FF8B  F6 E4				mul	ah			;MULTIPLY
+ FF8D  26: 00 04			ADD	es:[SI],AL		;ADD
+ FF90  46				INC	SI			;ADVANCE INDEX
+				; SET READ LOW
+ FF91  B0 04			READEND:MOV	AL,CSELECT
+ FF93  42				inc	dx	;MOV	DX,CALCTL
+ FF94  EE				OUT	DX,AL			;SET READ LOW
+				; DISABLE INPUT LATCH
+ FF95  42				inc	dx	;MOV	DX,CALINP
+ FF96  EC				in	al,dx
+ FF97  B0 0C				mov	AL,0CH			;ENABLE PRINTER LATCH
+ FF99  EE				OUT	DX,AL			;PUT IT BACK
+				; TEST FOR END OF LOOP
+ FF9A  FE C3				INC	BL			;INCREMENT REGISTER
+ FF9C  80 FB 0D 			CMP	BL,13			;ALL REGISTERS DONE?
+ FF9F  7E 9B				JLE	READLUP 		;NO. REPEAT LOOP
+				; TEST IF READ/WRITE STILL ENABLED
+ FFA1  E8 FFBA R			CALL	GETBUZY 		;GET CAL CHIP NOT BUSY LINE
+ FFA4  E1 90				loopz	READBEG 		;BR TO REDO IT
+				; READ DONE
+ FFA6				read_exit:
+ FFA6  B0 00				MOV	AL,0
+ FFA8  4A				dec	dx	;MOV	DX,CALCTL
+ FFA9  EE				OUT	DX,AL			;SET CHIP SELECT LOW
+
+ FFAA				cal_exit:
+ FFAA  58				pop	ax
+ FFAB  5B				pop	bx
+ FFAC  59				pop	cx
+ FFAD  5A				pop	dx
+									; restore registers to RIOS interface
+ FFAE  8A FB				mov	bh,bl
+ FFB0  8A DC				mov	bl,ah
+ FFB2  B4 00				mov	ah,0
+
+ FFB4  5F				pop	di
+ FFB5  5E				pop	si
+ FFB6  5D				pop	bp
+ FFB7  1F				pop	ds
+ FFB8  07				pop	es
+ FFB9  CF				iret
+				;LECTURE DU BUSY BIT
+
+ FFBA				GETBUZY:
+ FFBA  BA 03BE				MOV	DX,CALINP		; reg cntrl imprimante
+ FFBD  B0 2C				MOV	AL,2CH
+ FFBF  EE				OUT	DX,AL			; lecture bus donnees autorisee
+
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-23
+GOUPIL4 PC compatible Rom	I/O System				08-02-85
+				TOD - time-of-day driver	and character generator set
+
+ FFC0  B0 80				MOV	AL,80H			; lecture depuis le 58321
+ FFC2  4A				DEC	DX			; cntrl calendrier
+ FFC3  EE				OUT	DX,AL
+
+ FFC4  4A				DEC	DX			; donnees calendrier
+ FFC5  EC				IN	AL,DX
+ FFC6  A8 10				TEST	AL,10H			; busy bit
+
+ FFC8  B2 BE				MOV	DL,LOW CALINP
+ FFCA  B0 0C				MOV	AL,0CH
+ FFCC  EE				OUT	DX,AL			; invalidation bus de donnee
+ FFCD  C3				RET
+
+
+ FFCE				code	ends
+					end
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-1
+GOUPIL4 PC compatible Rom I/O System				08-02-85
+
+
+					page ,132
+					title GOUPIL4 PC compatible Rom I/O System
+					subttl HWRE - hardware reset code
+
+				;************************************************************************
+				;*
+				;*		iAPX-186 hardware reset code
+				;*
+				;************************************************************************
+
+			     C	include macros.inc
+			     C
+			     C	morg	macro	 arg1  ;overlap detection macro
+			     C		if1
+			     C		if $ gt arg1
+			     C		%out morg arg1 overlapping something!!!
+			     C		endif
+			     C		endif
+			     C		org arg1
+			     C		endm
+			     C
+			     C	link	macro	arg1,arg2	;set and print binlink info
+			     C		if1
+			     C		.radix	16
+			     C		outmsg	cut,arg1,%(arg2)
+			     C		outmsg	binlink,arg1,%(arg2-0c000h)
+			     C		.radix	10
+			     C		endif
+			     C		org	arg2
+			     C		endm
+			     C
+			     C	outmsg	macro	arg1,arg2,arg3
+			     C		%out arg1 arg2 to arg3
+			     C		endm
+			     C
+
+ 0000				code	segment
+					assume cs:code
+
+				;************************************************************************
+				;*
+				;*		set and print H/W binary link offset
+				;*
+				;************************************************************************
+
+				    link	hwre,0fff0h
+ FFF0			      + 	org	0fff0h
+
+				;************************************************************************
+				;*
+				;*		hardware reset entry point for iapx-186
+				;*
+				;************************************************************************
+ The Microsoft MACRO Assembler , Version 1.27 		Page	1-2
+GOUPIL4 PC compatible Rom I/O System				08-02-85
+				HWRE - hardware reset code
+
+
+							; our actual cs:ip is ffff:0
+ FFF0				RESET:
+ FFF0  BA FFA0				MOV	DX,0FFA0H		;UPPER MEMORY  = EPROM (UMCS)
+ FFF3  B8 F83A				MOV	AX,0F838H+2		;32K
+ FFF6  EF				OUT	DX,AX
+ FFF7  EA				db	0eah			;jump far to set cs:ip to fc00:2050
+ FFF8  E050				dw	0e050h			;PC compatible entry!
+ FFFA  F000				dw	0f000h
+
+				;***************	End Of PROM Data	*****************
+
+ FFFC				code	ends
+					end
+
