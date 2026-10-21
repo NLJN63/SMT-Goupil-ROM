@@ -42,7 +42,7 @@ bios/
 ├── Strator/               terminal point de vente Strator
 ├── SFENA-5090/            SFENA 5090
 ├── Accessoires/           claviers, cartes vidéo, contrôleur disque, carte réseau
-└── Utilitaires/RAZ-PWR6/  PROM d'effacement du mot de passe
+└── Utilitaires/           PROM d'effacement du mot de passe, utilitaire DOS du Club
 captures/                  écrans de démarrage et de setup, polices de caractères
 docs/                      nomenclature PROM de SMT-Goupil
 ```
@@ -56,6 +56,7 @@ docs/                      nomenclature PROM de SMT-Goupil
 | `CLUB_U45A.BIN` | 27C256 | 4200 | Moniteur du Goupil Club (8088, position U45), `G4MON-88 V2R1` et `CMON-6301` : la version qu'affiche un Club réel (« CMON-6301 V1R2 -- G4MON-88 V2R1 »), plus récente que la V1R1 de `CLUB1_U45B.BIN`. Dump validé sur une machine réelle : la ROM fonctionne sur un Club. PROM absente du tableau SMT (qui ne donne que l'U45B du Club V1), d'où la somme sans marque. Elle porte l'indice A, la V1R1 l'indice B. Différences avec la V1R1 [ci-dessous](#g4mon-88-v2r1--ce-qui-change-par-rapport-à-la-v1r1). |
 | `CLUB1_U45B.BIN` | 27C256 | 5500 ✓ | Moniteur du Goupil Club V1 (8088, position U45). Contient `G4MON-88 V1R1` et `CMON-6301` : BIOS 8088 dérivé du G4, plus le dialogue avec le microcontrôleur Hitachi 6301, qui sert d'horloge temps réel et porte sa propre version (`V1R2` sur un Club réel ; liaison série bit à bit sur le 8255). |
 | `CLUB_U97A.BIN` | 27C64 | DDC0 ✓ | Générateur de caractères (polices vidéo) du Club, position U97. Presque identique à la police de la carte vidéo G4GA (9 octets d'écart). |
+| [`../Utilitaires/P10AHFF/P10AHFF.COM`](bios/Utilitaires/P10AHFF/P10AHFF.COM) | — | 15CA | Utilitaire DOS du Club (disquette de démonstration), rangé avec les [utilitaires](#utilitaires--biosutilitaires) : il empêche Norton Commander de faire perdre l'écran LCD interne, voir [ci-dessous](#g4mon-88-v2r1--ce-qui-change-par-rapport-à-la-v1r1). |
 
 ### G4MON-88 V2R1 : ce qui change par rapport à la V1R1
 
@@ -100,8 +101,8 @@ Les vraies modifications :
   mise à jour de l'écran de TopView/DESQview), avec un AL quelconque. Sur un Club réel, le
   lancement de Norton fait ainsi perdre l'affichage sur le LCD au profit de l'écran externe.
   La disquette de démonstration du Club charge pour cela, dans son `AUTOEXEC.BAT` avant
-  Norton, [`P10AHFF.COM`](bios/Club/utilitaires/P10AHFF.COM) (47 octets, 30/01/1987, conservé dans
-  `bios/Club/utilitaires/`) : un programme résident qui intercepte
+  Norton, [`P10AHFF.COM`](#utilitaires--biosutilitaires) (47 octets, 30/01/1987, conservé dans
+  `bios/Utilitaires/P10AHFF/`) : un programme résident qui intercepte
   l'`INT 10h` et rend la main sans rien faire quand AH = `FFh`. L'écran choisi au démarrage
   est ainsi conservé. Le mécanisme est le même avec la V1R1, qui a la même fonction.
 
@@ -422,11 +423,12 @@ Autotest et SET-UP : voir les [captures](captures/README.md#sfena-5090).
 | `GoupilNet/goupilnet2-3JD.BIN` | 27C256 | 9700 | Micrologiciel de la carte réseau **GoupilNet 2** (3JD), version 2.00 : noyau temps réel (`SYSTEME`, `DRIVERS`, `cmd_task`) et piles X.25, SNA/QLLC, TNS et NetBIOS. Fourni deux fois (seul et dans un zip), même contenu. |
 | `Carte-test-G16/G16TEST.BIN` | 27C256 | 2200 | ROM de la **carte de test G16** de SMT-Goupil : `G16TEST #1.0` du 03/09/90. C'est une ROM d'extension de 32 Ko (en-tête `55 AA`), lancée par le BIOS pendant le POST. Elle contient une suite de tests de production en anglais avec trois modes : *Go/Nogo*, *Assembly* et *Burning* (déverminage). Elle se configure selon le nombre de disquettes et de disques durs, propose des chaînes de tests programmables et tient des compteurs de tests et d'erreurs. |
 
-## Utilitaires — `bios/Utilitaires/RAZ-PWR6/`
+## Utilitaires — `bios/Utilitaires/`
 
 | Fichier | EPROM | C.R.C | Description |
 |---|---|---|---|
-| `RAZ-PWR6.BIN` | 27C512 | A61A ✓ | **PROM de réinitialisation du mot de passe** pour Goupil G5, G6 et Golf SX (« PROM REINIT PASSWORD »). C'est un BIOS SX complet (`PVGA V3`) qui efface le mot de passe stocké en CMOS : on l'installe le temps d'un démarrage, puis on remet la PROM d'origine. Aussi fourni sous le nom `EPROM_REINIT_PWR6 GOLF_SX_GOUPIL.BIN`. |
+| `RAZ-PWR6/RAZ-PWR6.BIN` | 27C512 | A61A ✓ | **PROM de réinitialisation du mot de passe** pour Goupil G5, G6 et Golf SX (« PROM REINIT PASSWORD »). C'est un BIOS SX complet (`PVGA V3`) qui efface le mot de passe stocké en CMOS : on l'installe le temps d'un démarrage, puis on remet la PROM d'origine. Aussi fourni sous le nom `EPROM_REINIT_PWR6 GOLF_SX_GOUPIL.BIN`. |
+| `P10AHFF/P10AHFF.COM` | — (programme DOS, 47 octets) | 15CA | Utilitaire du **Goupil Club**, du 30/01/1987, trouvé sur la disquette de démonstration du Club, qui le charge dans son `AUTOEXEC.BAT` avant Norton Commander. Programme résident qui intercepte l'`INT 10h` et rend la main sans rien faire quand AH = `FFh`. Sur le Club, cette fonction du BIOS bascule l'affichage entre l'écran LCD interne et l'écran externe (prise DB9). Norton Commander l'appelle et fait perdre l'affichage interne ; `P10AHFF` l'en empêche. Voir le [Club](#g4mon-88-v2r1--ce-qui-change-par-rapport-à-la-v1r1). |
 
 ---
 
