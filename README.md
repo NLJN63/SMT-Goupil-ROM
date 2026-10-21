@@ -100,7 +100,8 @@ Les vraies modifications :
   mise à jour de l'écran de TopView/DESQview), avec un AL quelconque. Sur un Club réel, le
   lancement de Norton fait ainsi perdre l'affichage sur le LCD au profit de l'écran externe.
   La disquette de démonstration du Club charge pour cela, dans son `AUTOEXEC.BAT` avant
-  Norton, `P10AHFF.COM` (47 octets, 30/01/1987) : un programme résident qui intercepte
+  Norton, [`P10AHFF.COM`](bios/Club/utilitaires/P10AHFF.COM) (47 octets, 30/01/1987, conservé dans
+  `bios/Club/utilitaires/`) : un programme résident qui intercepte
   l'`INT 10h` et rend la main sans rien faire quand AH = `FFh`. L'écran choisi au démarrage
   est ainsi conservé. Le mécanisme est le même avec la V1R1, qui a la même fonction.
 
