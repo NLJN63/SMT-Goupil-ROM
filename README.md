@@ -367,13 +367,13 @@ doublant chaque caractère en mémoire.
 
 | Fichier | EPROM | C.R.C | Description |
 |---|---|---|---|
-| `GOLF_SX_V1R6_11M.BIN` | 27C512 | 6500 | Golf SX, BIOS `GLMON-SX V1R6` du 07/11/89 + `PVGA V3`. EPROM d'origine « MGSX.1 11M/C V1R6 » (TMS 27C512, support 11M) : **dump relu sur un Golf SX réel** en novembre 2026, identique. |
+| `MGSX.1.11M-C.BIN` | 27C512 | 6500 | Golf SX, BIOS `GLMON-SX V1R6` du 07/11/89 + `PVGA V3`. PROM **MGSX.1.11M/C** (indice C), TMS 27C512 du support 11M : **dump relu sur un Golf SX réel**, identique. Indice antérieur à celui du tableau SMT, d'où l'absence de ✓. Aussi fourni sous le nom `GOLF_SX_V1R6_11M.BIN`. |
 | `GOLF_SXC_V1R6_DGI.BIN` | 27C512 | 5500 | Golf SX**C**, BIOS V1R6 du 06/04/90, variante « DGI » (vraisemblablement une série client). |
-| `MGSX.1.11M-E.BIN` | 27C512 | 5100 ✓ | Golf SX 16 à 20 MHz, BIOS V1R7 du 12/04/90 + `PVGA V4`. Aussi fourni sous le nom `GOLF_SX_V1R7.BIN`. |
+| `MGSX.1.11M-E.BIN` | 27C512 | 5100 ✓ | Golf SX 16 à 20 MHz, BIOS `GLMON-SX V1R7` du 12/04/90 + `PVGA V4`. PROM **MGSX.1.11M/E** (indice E), celle du tableau SMT : **dump relu sur un Golf SX réel**, identique. Aussi fourni sous le nom `GOLF_SX_V1R7.BIN`. |
 | `ISA32A-R2.BIN` | 27C512 | 0E00 ✓ | Carte ISA32-A pour **G5 et Golf SX**, BIOS `ISA32-A R2` du 05/03/91, `SVGA V5`, code article 40618055A. Aussi fourni sous les noms `ISA32_A_R2.BIN` et `Goupil_ISA32AR2.BIN`. Le dossier G5 en contenait aussi une copie. |
 | `ISA32_A_R2_modif_disque170m.BIN` | 27C512 | 0E00 | ISA32-A R2 modifié pour un disque de 170 Mo : 8 octets changés dans la table des disques (`E4EBh`-`E57Fh`). La somme est conservée. |
 
-Noms des EPROM du Golf SX : « MGSX.1 » est la référence de la PROM, « 11M » son support sur la carte et la lettre finale l'indice de révision (C = V1R6, E = V1R7), d'après les étiquettes connues.
+Notation des PROM : celle de la colonne « Désignation / indice PROM » du tableau SMT. Pour `MGSX.1.11M/E`, « MGSX.1 » est la désignation de la PROM du Golf SX, « 11M » son support sur la carte et la lettre après la barre l'**indice**, qui avance à chaque révision du contenu. Le tableau ne donne que le dernier indice de chaque PROM : V1R7 = E pour le Golf SX (C = V1R6 ; l'indice D n'est pas retrouvé), V1R7 = D pour le Golf 286 (C = V1R6B). Dans les noms de fichiers, la barre devient un tiret.
 
 ### Golf 486
 

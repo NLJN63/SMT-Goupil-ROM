@@ -147,7 +147,7 @@ pose alors la question « System setup (Y/N) ? ».
 
 | BIOS | Démarrage | Setup |
 |---|---|---|
-| Golf SX - V1R6<br>`GOLF_SX_V1R6_11M.BIN` | <a href="Golf/SX/GOLF_SX_V1R6_11M_demarrage.png"><img src="Golf/SX/GOLF_SX_V1R6_11M_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/GOLF_SX_V1R6_11M_setup.png"><img src="Golf/SX/GOLF_SX_V1R6_11M_setup.png" width="280" alt="setup"></a> |
+| Golf SX - V1R6<br>`MGSX.1.11M-C.BIN` | <a href="Golf/SX/MGSX.1.11M-C_demarrage.png"><img src="Golf/SX/MGSX.1.11M-C_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/MGSX.1.11M-C_setup.png"><img src="Golf/SX/MGSX.1.11M-C_setup.png" width="280" alt="setup"></a> |
 | Golf SXC - V1R6 DGI<br>`GOLF_SXC_V1R6_DGI.BIN` | <a href="Golf/SX/GOLF_SXC_V1R6_DGI_demarrage.png"><img src="Golf/SX/GOLF_SXC_V1R6_DGI_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/GOLF_SXC_V1R6_DGI_setup.png"><img src="Golf/SX/GOLF_SXC_V1R6_DGI_setup.png" width="280" alt="setup"></a> |
 | Golf SX - V1R7<br>`MGSX.1.11M-E.BIN` | <a href="Golf/SX/MGSX.1.11M-E_demarrage.png"><img src="Golf/SX/MGSX.1.11M-E_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/MGSX.1.11M-E_setup.png"><img src="Golf/SX/MGSX.1.11M-E_setup.png" width="280" alt="setup"></a> |
 | ISA32-A R2 (G5 / Golf SX)<br>`ISA32A-R2.BIN` | <a href="Golf/SX/ISA32A-R2_demarrage.png"><img src="Golf/SX/ISA32A-R2_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/ISA32A-R2_setup.png"><img src="Golf/SX/ISA32A-R2_setup.png" width="280" alt="setup"></a> |
