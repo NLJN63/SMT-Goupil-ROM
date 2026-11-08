@@ -264,7 +264,7 @@ gauche.
 | `M3G6SX-AC.17J-2.BIN` | 27C512 | BC00 ✓ | G6 SX AC 20 MHz. Contenu identique au précédent. |
 | `M3G6DX.17L-2.BIN` | 27C512 | BC00 ✓ | G6 DX 25 à 33 MHz. Contenu identique. |
 | `M4G6-486.18K-2.BIN` | 27C512 | BC00 ✓ | G6 486 25 à 33 MHz. Contenu identique. Les quatre étiquettes portent la même image V1R1.4 ; elle est aussi fournie sous les noms `G6_SX_V1R1_4`, `G6_SX_AC_V1R1_4` et `G6_DX_V1R1_4`. |
-| `ISA32B-R2.BIN` | 27C512 | 3000 ✓ | Carte ISA32-B, BIOS `ISA32-B R2` du 05/03/91, avec `SVGA V5`. C'est aussi le BIOS du **Golf 486**. Aussi fourni sous les noms `Goupil_ISA32BR2.BIN` et `ISA32_B_R2.BIN`. |
+| `ISA32B-R2.BIN` | 27C512 | 3000 ✓ | Carte ISA32-B, BIOS `ISA32-B R2` du 05/03/91, avec `SVGA V5`. C'est aussi le BIOS du **Golf 486** (carte mère propre au Golf, qui partage ce BIOS avec les cartes ISA32-B). Aussi fourni sous les noms `Goupil_ISA32BR2.BIN` et `ISA32_B_R2.BIN`. |
 | `ISA32BR2.2.BIN` | 27C512 | 1D00 ✓ | BIOS `ISA32-B R2.2` du 01/02/91. Aussi fourni sous le nom `G6_ISA32B_R2_2.BIN`. |
 | `ISA32B-R3.4.BIN` | 27C512 | 2500 ✓ | BIOS `ISA32-B R3.4` du 06/03/91, marqué **PROTO** dans le tableau. Aussi fourni sous le nom `G6_SX_ISA32B_R3_4.BIN`. |
 | `ISA32B_R2_G6_SX_MODIF_TYPE36.BIN` | 27C512 | 3000 | ISA32-B R2 modifié : 12 octets changés vers `E481h`-`E57Eh`, dans la table des disques durs, pour définir un type 36. La somme a été rééquilibrée. |
@@ -377,7 +377,7 @@ Notation des PROM : celle de la colonne « Désignation / indice PROM » du tabl
 
 ### Golf 486
 
-Le Golf 486 utilise la carte ISA32-B : son BIOS d'origine est `bios/G6/ISA32B-R2.BIN`. Un dump fait sur la machine (`DUMP_GOLF486.BIN`) est identique octet pour octet à ce fichier, il n'est donc pas stocké une seconde fois.
+Le Golf 486 a sa propre carte mère, spécifique au Golf : ce n'est pas une carte ISA32-B de G6. Elle partage en revanche le même BIOS que les cartes mères ISA32-B : son BIOS d'origine est `bios/G6/ISA32B-R2.BIN`. Un dump fait sur la machine (`DUMP_GOLF486.BIN`) est identique octet pour octet à ce fichier, il n'est donc pas stocké une seconde fois.
 
 ## Strator — `bios/Strator/`
 
