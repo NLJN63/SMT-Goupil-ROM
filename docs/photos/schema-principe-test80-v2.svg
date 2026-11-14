@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 690" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <style>
+      .blk{fill:#fff;stroke:#333;stroke-width:1.6}
+      .isa{fill:#f3e9c6;stroke:#8a6d1a;stroke-width:1.6}
+      .dec{fill:#e3edf9;stroke:#2b5d9b;stroke-width:1.6}
+      .led{fill:#e2f4e2;stroke:#2e7d32;stroke-width:1.6}
+      .rom{fill:#f6e3ef;stroke:#8e2f6a;stroke-width:1.6}
+      .cfg{fill:#f1f1f1;stroke:#777;stroke-width:1.4;stroke-dasharray:5 3}
+      .w{stroke:#333;stroke-width:1.8;fill:none;marker-end:url(#a)}
+      .bus{stroke:#333;stroke-width:4;fill:none;marker-end:url(#a)}
+      .h{stroke:#777;stroke-width:1.6;fill:none;stroke-dasharray:6 4;marker-end:url(#a)}
+      .t{font-weight:bold;font-size:14px}
+      .s{font-size:11.5px;fill:#444}
+      .l{font-size:11.5px;fill:#222}
+    </style>
+  </defs>
+  <rect width="1040" height="700" fill="#fff"/>
+  <text x="20" y="30" font-size="18" font-weight="bold">SMT TEST80-V2 — schéma de principe (reconstitué)</text>
+  <text x="20" y="50" class="s">Traits pleins : liaisons établies par le rôle des circuits. Traits pointillés : hypothèses à vérifier sur la carte.</text>
+
+  <!-- ISA connector -->
+  <rect x="20" y="80" width="150" height="560" rx="6" class="isa"/>
+  <text x="95" y="104" text-anchor="middle" class="t">Bus ISA 8 bits</text>
+  <text x="95" y="122" text-anchor="middle" class="s">connecteur 62 contacts</text>
+  <text x="34" y="170" class="l">A0–A19</text>
+  <text x="34" y="200" class="l">AEN</text>
+  <text x="34" y="225" class="l">IOW#</text>
+  <text x="34" y="250" class="l">MEMR#</text>
+  <text x="34" y="420" class="l">D0–D7</text>
+  <text x="34" y="600" class="l">+5 V, GND</text>
+
+  <!-- 74LS244 -->
+  <rect x="230" y="140" width="150" height="130" rx="6" class="blk"/>
+  <text x="305" y="166" text-anchor="middle" class="t">2 × 74LS244</text>
+  <text x="305" y="186" text-anchor="middle" class="s">tampons unidirectionnels</text>
+  <text x="305" y="204" text-anchor="middle" class="s">adresses et commandes</text>
+  <path d="M170,165 H228" class="bus"/>
+  <path d="M170,196 H228" class="w"/>
+  <path d="M170,221 H228" class="w"/>
+  <path d="M170,246 H228" class="w"/>
+
+  <!-- DECIO -->
+  <rect x="450" y="90" width="170" height="90" rx="6" class="dec"/>
+  <text x="535" y="116" text-anchor="middle" class="t">PAL « DECIO »</text>
+  <text x="535" y="136" text-anchor="middle" class="s">décodage E/S</text>
+  <text x="535" y="154" text-anchor="middle" class="s">écriture sur le port 80h</text>
+  <text x="535" y="170" text-anchor="middle" class="s">(A0–A9, AEN, IOW#)</text>
+  <path d="M380,160 C415,160 415,135 448,135" class="w"/>
+
+  <!-- DECROM -->
+  <rect x="450" y="230" width="170" height="100" rx="6" class="dec"/>
+  <text x="535" y="256" text-anchor="middle" class="t">PAL « DECROM »</text>
+  <text x="535" y="276" text-anchor="middle" class="s">décodage mémoire</text>
+  <text x="535" y="294" text-anchor="middle" class="s">fenêtre de la ROM</text>
+  <text x="535" y="312" text-anchor="middle" class="s">(A15–A19, MEMR#)</text>
+  <path d="M380,240 C415,240 415,270 448,270" class="w"/>
+
+  <!-- Config jumpers -->
+  <rect x="450" y="575" width="250" height="100" rx="6" class="cfg"/>
+  <text x="575" y="601" text-anchor="middle" class="t">Cavaliers TYPE, VALID, ORIGINE</text>
+  <text x="575" y="621" text-anchor="middle" class="s">+ porte logique 74xx (près d'ORIGINE)</text>
+  <text x="575" y="639" text-anchor="middle" class="s">+ réseau de résistances RZ1</text>
+  <text x="575" y="657" text-anchor="middle" class="s">rôle supposé : validation et adresse de la ROM</text>
+  <path d="M575,573 C575,470 560,380 545,333" class="h"/>
+
+  <!-- 74LS623 -->
+  <rect x="230" y="380" width="150" height="100" rx="6" class="blk"/>
+  <text x="305" y="406" text-anchor="middle" class="t">74LS623</text>
+  <text x="305" y="426" text-anchor="middle" class="s">transceiver bidirectionnel</text>
+  <text x="305" y="444" text-anchor="middle" class="s">bus de données D0–D7</text>
+  <path d="M170,415 H228" class="bus" marker-start="url(#a)"/>
+  <path d="M450,315 C380,315 305,330 305,378" class="h"/>
+  <text x="322" y="338" class="s">sens / validation</text>
+
+  <!-- internal data bus -->
+  <path d="M380,430 H788" stroke="#333" stroke-width="4"/>
+  <text x="470" y="422" class="l">bus de données interne D0–D7</text>
+
+  <!-- 74F534 -->
+  <rect x="690" y="90" width="150" height="120" rx="6" class="led"/>
+  <text x="765" y="116" text-anchor="middle" class="t">74F534</text>
+  <text x="765" y="136" text-anchor="middle" class="s">verrou 8 bits</text>
+  <text x="765" y="154" text-anchor="middle" class="s">sorties inversées</text>
+  <text x="765" y="172" text-anchor="middle" class="s">mémorise l'octet écrit</text>
+  <path d="M620,135 H688" class="w"/>
+  <text x="630" y="127" class="s">horloge</text>
+  <path d="M740,430 V212" class="bus"/>
+  <text x="748" y="250" class="s">D0–D7</text>
+
+  <!-- LEDs -->
+  <rect x="890" y="80" width="130" height="150" rx="6" class="led"/>
+  <text x="955" y="104" text-anchor="middle" class="t">8 LED</text>
+  <text x="955" y="122" text-anchor="middle" class="s">7 6 5 4 | 3 2 1 0</text>
+  <text x="955" y="146" text-anchor="middle" class="s">+5 V → RZ2 → LED</text>
+  <text x="955" y="162" text-anchor="middle" class="s">→ sortie Q̄</text>
+  <text x="955" y="186" text-anchor="middle" class="s">bit à 1 → Q̄ = 0</text>
+  <text x="955" y="202" text-anchor="middle" class="s">→ LED allumée</text>
+  <path d="M840,150 H888" class="bus"/>
+  <text x="846" y="142" class="s">Q̄0–Q̄7</text>
+
+  <!-- EPROM -->
+  <rect x="790" y="370" width="200" height="140" rx="6" class="rom"/>
+  <text x="890" y="396" text-anchor="middle" class="t">EPROM 27C256</text>
+  <text x="890" y="414" text-anchor="middle" class="s">« G16 TEST », 32 Ko</text>
+  <text x="890" y="432" text-anchor="middle" class="s">ROM d'extension (55 AA)</text>
+  <text x="890" y="450" text-anchor="middle" class="s">probablement en C8000h</text>
+  
+  <path d="M620,300 H890 V368" class="w"/>
+  <text x="800" y="292" class="s">CE# / OE#</text>
+  <path d="M380,255 H420 V530 H930 V512" class="bus"/>
+  <text x="640" y="548" class="s">A0–A14</text>
+</svg>

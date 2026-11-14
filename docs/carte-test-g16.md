@@ -25,6 +25,27 @@ machine réelle.
 | EPROM NEC 27C256, étiquette « G16 TEST » | la ROM G16 TEST |
 | cavaliers `TYPE`, `VALID`, `ORIGINE` | rôle non déterminé (probablement validation et adresse de la ROM) |
 
+## Schéma de principe
+
+Reconstitué à partir des circuits présents et du code de G16 TEST, sans relevé des pistes.
+Traits pleins : liaisons établies par le rôle des circuits ; traits pointillés : hypothèses à
+vérifier sur la carte.
+
+![Schéma de principe de la carte TEST80-V2](photos/schema-principe-test80-v2.svg)
+
+- **Affichage** : la PAL `DECIO` reconnaît une écriture sur le port 80h (A0–A9, AEN, IOW#) et
+  donne l'horloge au `74F534`, qui mémorise D0–D7 jusqu'à l'écriture suivante. Ses sorties
+  sont inversées : chaque LED est branchée entre le +5 V (à travers `RZ2`) et une sortie, si
+  bien qu'un bit à 1 l'allume.
+- **ROM** : la PAL `DECROM` reconnaît une lecture dans la fenêtre de la ROM (A15–A19, MEMR#)
+  et valide l'EPROM, adressée par A0–A14. Le `74LS623` relie le bus de données interne au bus
+  ISA ; sa commande par `DECROM` est supposée.
+- **Tampons** : les deux `74LS244` retransmettent les adresses et les commandes du bus.
+- **À vérifier** : rôle des cavaliers `TYPE`, `VALID` et `ORIGINE` (activation et adresse de la
+  ROM, probablement `C8000h`), référence de la porte logique voisine et des PAL, répartition
+  des lignes entre les deux `74LS244`. Un schéma complet demanderait le relevé des pistes et la
+  lecture des deux PAL.
+
 ## Lire les LED
 
 Les 8 LED forment **un seul octet**, à lire en hexadécimal. Une LED allumée vaut 1 :
