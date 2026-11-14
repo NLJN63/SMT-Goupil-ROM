@@ -44,7 +44,7 @@ bios/
 ├── Accessoires/           claviers, cartes vidéo, contrôleur disque, carte réseau
 └── Utilitaires/           PROM d'effacement du mot de passe, utilitaire DOS du Club
 captures/                  écrans de démarrage et de setup, polices de caractères
-docs/                      nomenclature PROM de SMT-Goupil
+docs/                      nomenclature PROM de SMT-Goupil, carte de test G16
 ```
 
 ---
@@ -423,7 +423,7 @@ Autotest et SET-UP : voir les [captures](captures/README.md#sfena-5090).
 | `EGA-Paradise-G40/G40_EGA.BIN` | 27128 | 7200 | BIOS de la carte EGA Paradise du G40 (`PEGA BIOS`, Paradise Systems 1986, réf. 28290-A1101). |
 | `Disque-Xebec-G4/XEBEC_G4_10413BG.BIN` | 2732 | 8A32 | Micrologiciel du Z80 d'un contrôleur de disque dur Xebec (étiquette 10413BG), et non une ROM d'extension PC. Il présente au PC l'interface AT du WD1003 (registres en `1F0h`-`1F7h` : restore, lecture, écriture, vérification, formatage, seek, diagnostic, paramètres), celle qu'emploient les BIOS du G40 ; les BIOS du G4 attendent un contrôleur XT en `320h`. L'étiquette « G4 » est donc à vérifier. Pas de table de disques (elle est dans le BIOS système) ; 17 secteurs par piste (MFM). |
 | `GoupilNet/goupilnet2-3JD.BIN` | 27C256 | 9700 | Micrologiciel de la carte réseau **GoupilNet 2** (3JD), version 2.00 : noyau temps réel (`SYSTEME`, `DRIVERS`, `cmd_task`) et piles X.25, SNA/QLLC, TNS et NetBIOS. Fourni deux fois (seul et dans un zip), même contenu. |
-| `Carte-test-G16/G16TEST.BIN` | 27C256 | 2200 | ROM de la **carte de test G16** de SMT-Goupil : `G16TEST #1.0` du 03/09/90. C'est une ROM d'extension de 32 Ko (en-tête `55 AA`), lancée par le BIOS pendant le POST. Elle contient une suite de tests de production en anglais avec trois modes : *Go/Nogo*, *Assembly* et *Burning* (déverminage). Elle se configure selon le nombre de disquettes et de disques durs, propose des chaînes de tests programmables et tient des compteurs de tests et d'erreurs. |
+| `Carte-test-G16/G16TEST.BIN` | 27C256 | 2200 | ROM de la **carte de test G16** de SMT-Goupil : `G16TEST #1.0` du 03/09/90. C'est une ROM d'extension de 32 Ko (en-tête `55 AA`), lancée par le BIOS pendant le POST. Elle contient une suite de tests de production en anglais avec trois modes : *Go/Nogo*, *Assembly* et *Burning* (déverminage). Elle se configure selon le nombre de disquettes et de disques durs, propose des chaînes de tests programmables et tient des compteurs de tests et d'erreurs. Carte TEST80-V2 qui la porte, lecture des 8 LED du port 80h, codes du POST et bips des BIOS reconnus par G16 TEST : [docs/carte-test-g16.md](docs/carte-test-g16.md). |
 
 ## Utilitaires — `bios/Utilitaires/`
 
