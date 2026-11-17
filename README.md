@@ -38,7 +38,7 @@ bios/
 ├── G6/                    Goupil 6 : SX, SX AC, DX, 486, carte ISA32-B, BIOS ATON ISA-B
 ├── G60/                   Goupil 60 EISA + disquette de configuration ECU
 ├── G100/                  Goupil 100 + terminal GT220
-├── Golf/                  Golf XT, Golf 286, Golf SX
+├── Golf/                  Golf XT, Golf 286, Golf SX, Golf 486 (BIOS modifié)
 ├── Strator/               terminal point de vente Strator
 ├── SFENA-5090/            SFENA 5090
 ├── Accessoires/           claviers, cartes vidéo, contrôleur disque, carte réseau
@@ -378,6 +378,13 @@ Notation des PROM : celle de la colonne « Désignation / indice PROM » du tabl
 ### Golf 486
 
 Le Golf 486 a sa propre carte mère, spécifique au Golf : ce n'est pas une carte ISA32-B de G6. Elle partage en revanche le même BIOS que les cartes mères ISA32-B : son BIOS d'origine est `bios/G6/ISA32B-R2.BIN`. Un dump fait sur la machine (`DUMP_GOLF486.BIN`) est identique octet pour octet à ce fichier, il n'est donc pas stocké une seconde fois.
+
+Le dossier `bios/Golf/486/` contient une version **modifiée** de ce BIOS, faite pour un Golf 486
+dont la pile de l'horloge (DS1287) est épuisée. Ce n'est pas une ROM SMT-Goupil d'origine.
+
+| Fichier | EPROM | C.R.C | Description |
+|---|---|---|---|
+| `ISA32-B_R2-batHS-autoconf-logo.BIN` | 27C512 | A400 | `ISA32-B R2` modifié, MD5 `c6c10472858473b0afd88c76c02f352d`. **Pile HS** : le BIOS n'efface plus la configuration quand la pile est morte. **Auto-configuration** : à chaque démarrage à froid, l'horloge et la configuration (A: 1,44 Mo, disque type 39, 640 + 15 360 Ko, français) sont réécrites, et la machine démarre seule. **Logo Goupil** en haut à droite pendant le démarrage ([capture](captures/Golf/486/ISA32-B_R2-batHS-autoconf-logo_demarrage.png)), au choix dans une nouvelle ligne du setup « Logo au démarrage » ; le logo par défaut revient après chaque coupure de courant. Le BIOS vidéo n'est pas modifié. Validée sur un Golf 486 réel le 17 novembre 2026. |
 
 ## Strator — `bios/Strator/`
 

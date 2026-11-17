@@ -153,6 +153,16 @@ pose alors la question « System setup (Y/N) ? ».
 | ISA32-A R2 (G5 / Golf SX)<br>`ISA32A-R2.BIN` | <a href="Golf/SX/ISA32A-R2_demarrage.png"><img src="Golf/SX/ISA32A-R2_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/ISA32A-R2_setup.png"><img src="Golf/SX/ISA32A-R2_setup.png" width="280" alt="setup"></a> |
 | ISA32-A R2 modifié disque 170 Mo<br>`ISA32_A_R2_modif_disque170m.BIN` | <a href="Golf/SX/ISA32_A_R2_modif_disque170m_demarrage.png"><img src="Golf/SX/ISA32_A_R2_modif_disque170m_demarrage.png" width="280" alt="démarrage"></a> | <a href="Golf/SX/ISA32_A_R2_modif_disque170m_setup.png"><img src="Golf/SX/ISA32_A_R2_modif_disque170m_setup.png" width="280" alt="setup"></a> |
 
+### Golf 486
+
+BIOS `ISA32-B R2` **modifié** (pile HS, auto-configuration, logo Goupil au démarrage) : voir
+[Golf 486](../README.md#golf-486). Écran calculé à partir de la ROM, avec le logo par défaut et
+les valeurs affichées par la machine réelle.
+
+| BIOS | Démarrage | Setup |
+|---|---|---|
+| Golf 486 - ISA32-B R2 modifié<br>`ISA32-B_R2-batHS-autoconf-logo.BIN` | <a href="Golf/486/ISA32-B_R2-batHS-autoconf-logo_demarrage.png"><img src="Golf/486/ISA32-B_R2-batHS-autoconf-logo_demarrage.png" width="280" alt="démarrage"></a> | — |
+
 ### Strator
 
 | BIOS | Démarrage | Setup |
