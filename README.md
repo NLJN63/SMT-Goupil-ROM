@@ -11,6 +11,10 @@ Version PROM / Désignation / Type d'EPROM / C.R.C / Code article »), reproduit
 Les écrans de démarrage (POST) et de configuration (setup) de chaque ROM sont réunis dans
 [captures/](captures/README.md).
 
+Fonctions cachées des BIOS (API de vitesse `INT 15h AH=E0h/E1h`, vitesse « Auto »), dates des ROM
+vidéo, étiquettes `FFE8` et comparaison octet à octet des BIOS :
+[docs/roms-decouvertes.md](docs/roms-decouvertes.md).
+
 ## Lire ce catalogue
 
 - **C.R.C** : somme sur 16 bits de tous les octets du fichier, la méthode de la
@@ -44,7 +48,7 @@ bios/
 ├── Accessoires/           claviers, cartes vidéo, contrôleur disque, carte réseau
 └── Utilitaires/           PROM d'effacement du mot de passe, utilitaire DOS du Club
 captures/                  écrans de démarrage et de setup, polices de caractères
-docs/                      nomenclature PROM de SMT-Goupil, carte de test G16
+docs/                      nomenclature PROM de SMT-Goupil, carte de test G16, fonctions cachées des ROM
 ```
 
 ---
