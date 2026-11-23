@@ -158,3 +158,61 @@ printemps 1990). À partir de 1991, les BIOS portent le nom d'un bus (**ISA16**,
 | 26-27 déc. 1991 | ROM vidéo et EISA R3.6 datées | ROM |
 | avril 1992 | ATON EISA-A R3.9 (G60) | ROM |
 | avril 1996 | ATON ISA-B R5.4 | ROM |
+
+## Recoupements avec la documentation SMT
+
+Sources : Goupil Revue n° 1 à 7 (mars 1982 – 1984), NIG n° 5, 13, 14, 29, 30, BIT n° 19-27,
+35-38, 106, 200-212, notes « Informations techniques diverses » (G40, G3/G4/G40), notes
+diverses, notice mémoire G5 (05/1988), manuel du moniteur couleur multimode (1986), notes
+GoupilNet DOS 3.1 (1985). Compilations retronik.silicium.org (Bjorn Darkaad, 2024).
+
+### Vérifié dans les ROM
+
+| Fait documenté | Vérification dans le dépôt |
+|---|---|
+| BIT 210 (28/08/1990) : avec les BIOS **VxR6 et VxR6B**, le débogueur intégré validé fait perdre 1 Ko de mémoire (CHKDSK) ; corrigé en VxR7 | `sub word [40:13h],1` puis segment du Ko réservé rangé en `40:06h`, présent dans **toutes** les R6/R6B (G5 286 V3R6, G5 386 V2R6, G50 V2R6 et V2R6B, Golf 286 V1R6B, Golf SX V1R6, Golf SXC V1R6B, RAZ-PWR6) et dans **aucune** R5 ni R7. La routine suivante teste le port `84h` bit 0 (accès débogueur). |
+| Goupil Revue n° 2 (1982) : la version du moniteur G2 se lit en `FD04h` (`13` = 16×64, `14` = 24×80) | MON2 (`F800h`-`FFFFh`) : en `FD03h`, `BITA #$14` — instruction neutre qui sert à loger l'octet de version à adresse fixe. Bannière `GOUPIL 1.4 8/81` en `F980h` : moniteur 24×80 V1.4 d'août 1981. |
+| Note G40 : table des disques durs retenus pour le G40 | Types 1 à 14 du BIOS `G4MON-286 V1R3` conformes (306/4 NEC 5124, 615/4 ST225-NEC 5126, 977/5 ST4051, 615/8 NEC 5146, 733/5 ST4038, 823/10 NEC 5452, 1024/9 ST4096…). `V2R5` remplace les types 8, 9, 14 et ajoute un type 16 : 9, 14 et 16 sont à 34-35 secteurs/piste (RLL/ESDI). |
+| BIT 23 (09/1984) : moniteurs G3 — 6809 `UC09.2 3D-B` V2R2, 8088 `RAPR.1 6B-C/5B-C` V1R2, Z80 `Z80.2 1B-C` V2.3, UNIBUG V2.3 | 8088 V1R2 = les deux RAPR du dépôt (exact). 6809 du dépôt = V2R0 indice A, antérieur à V2R2. Z80 du dépôt = V2.8, postérieur à V2.3. Le moniteur 8088 est sur la carte RAM/PROM, pas sur la carte UC (straps S13 à ajouter lors de la mise à niveau). |
+| Goupil Revue n° 7 : fonction moniteur 6809 `ACCMEM` = `SWI` + `FCB $0A` (A = page physique haute, B = page 6809) | Cohérent avec le gestionnaire de pages 4 Ko et l'exécutif à `SWI n` lus dans `G3MON-6809 V2R0`. Entrées-sorties en `FF000h`-`FF7FFh` ; une fois mappées en `F000h`, ACIA 1 en `F000h`-`F001h` (comme dans la ROM). |
+
+### Appris des documents
+
+- **Golf / G5 et contrôleur disquette** : NIG 5 — cavalier E30 du Golf 286 selon le
+  contrôleur WD37C65 (sans suffixe ou A/B).
+- **Disques Conner CP3022 / CP342** (IDE à contrôleur intégré) : cavalier dédié sur Golf 286,
+  G5 286 V4 et G5 386 SX (BIT 201-203, 03/1990), avec une 3e position « contrôleur externe ».
+- **Vidéo PVGA intégrée et SVGA 800×600** : G5 286 V4, Golf 286 et G5 386 SX ont un
+  oscillateur 36 MHz (+ 25,175 et 28,322 MHz) et un cavalier qui le valide « pour le mode SVGA ».
+  Sur le G5-286 VGA, les interrupteurs EGA de la façade (près de la prise souris) ont disparu :
+  tout passe par `MODE`.
+- **Lecteur de carte à mémoire** : cavaliers E21-E24 aussi sur G5 286 rév. D et G5 386 rév. B,
+  « les quatre doivent avoir la même position ».
+- **128 Ko cachés du G5 286 rév. D** : avec SW8 (façade) sur OFF et E16 retiré, 768 Ko
+  conventionnels ; les 128 Ko au-delà de 640 Ko sont en `D0000h`-`EFFFFh`, **non reconnus par
+  le BIOS**, à initialiser par logiciel avant lecture (sinon erreur de parité).
+- **G5 S86** : ses cartes mémoire de 1 Mo sont en mémoire **EMS** (pilote `EMS.SYS`), alors que
+  G5 286/386 sont en mémoire étendue.
+- **G40** : coprocesseur 80287 → PAL `C40.3FB` à la place de `C40.3FA`, test `T287` (BIT 106).
+- **G4 + carte EGA** : V1R4 retirer E23 ; V2R2 retirer E21 et SW1 contacts 5 et 6 sur ON.
+- **G50 rév. B** : cavalier E3 EPROM 27512/27256, E28 zone `C0000h`-`CFFFFh` cachable.
+- **OS/2 1.0 et 1.1 adaptés par SMT** (NIG 14, 06/1989) : FDISK maison, 4 partitions, jusqu'à
+  128 Mo, démarrage sur n'importe quelle partition ; PROM EGA reconnue à toute adresse.
+- **3614 code SMTT** : NIG et BIT consultables sur Minitel.
+- **Goupil 3** (Revue n° 4, 7 et notes) : sortie le 1er janvier 1983 ; cartes 6809, Z80 et
+  8088 cohabitant à deux, sélectionnées par commutateur ; la carte 8088 n'a pas de RAM (carte
+  256 Ko obligatoire) ; bus compatible **G64** ; espace d'adresses 1 Mo par pages de 4 Ko ;
+  MS-DOS **2.06** (puis 2.11), jusqu'à 6 lecteurs A-F ; la configuration de base peut utiliser
+  un **Minitel** comme clavier-écran ; carte synthèse vocale Alcatel, IEEE-488, Vidéotex.
+- **Goupil 2** : 16, 48 ou 64 Ko (DRAM 4116) ; PROM moniteur rouges (16×64), vertes (24×80) ou
+  bleues (disque dur) ; G2FLEX2 remonté de 8 Ko pour préparer le passage au 6809 (FLEX9) ;
+  Winchester 5" de 5 Mo sur WD1000.
+- **GoupilNet (1985-1987)** : Microsoft Networks (MS-NET) adapté par SMT pour MS-DOS 3.1
+  (« Microsoft Networks SERVER Version 1.0 », © Microsoft - SMT Goupil 1985) : REDIR, XPORT,
+  SESSION, FSERVER. Cartes « transporteur » pour Goupil 3-PC et G4, adresse 00h-3Fh par
+  micro-interrupteurs, recopiée dans le fichier `NETADDR` (adresse sur 20 octets, l'octet suivant
+  réservé à une passerelle télécommunications), bus deux fils avec résistance de fin de ligne.
+  Sans rapport avec la carte GoupilNet 2 du dépôt (X.25, SNA, NetBIOS). La couche physique n'est
+  décrite dans aucun des documents.
+- **Moniteur couleur multimode** (1986) : 13", tube 370HYB22, 15,5-35 kHz automatique, CGA/EGA/PGA
+  et analogique, pour G4 et G40. Fabricant non indiqué.

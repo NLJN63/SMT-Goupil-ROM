@@ -12,7 +12,8 @@ Les écrans de démarrage (POST) et de configuration (setup) de chaque ROM sont 
 [captures/](captures/README.md).
 
 Fonctions cachées des BIOS (API de vitesse `INT 15h AH=E0h/E1h`, vitesse « Auto »), dates des ROM
-vidéo, étiquettes `FFE8` et comparaison octet à octet des BIOS :
+vidéo, étiquettes `FFE8`, comparaison octet à octet des BIOS et recoupements avec la
+documentation SMT (Goupil Revue, NIG, BIT) :
 [docs/roms-decouvertes.md](docs/roms-decouvertes.md).
 
 ## Lire ce catalogue
@@ -120,9 +121,16 @@ Machine 6800 de 1979. EPROM 2516 et 2716 de 2 Ko.
 | Fichier | EPROM | C.R.C | Description |
 |---|---|---|---|
 | `MON1_G2_MN2D_24X80_8_pouce.BIN` | 2516 | D785 ✓ | Moniteur MON1 (MN2D), affichage 24×80, amorçage sur disquette 8 pouces. Le dump contient des restes de source 6800 (`BOOT85`, `LDAB COMR91 GET WD STATUS`…). Aussi fourni sous le nom `MON1_24X80_8pouce_MN2D_G2.BIN`. |
-| `MON2_G2_MN3D_24X80_8_pouce.BIN` | 2516 | AD9B ✓ | Moniteur MON2 (MN3D), même configuration. Aussi fourni sous le nom `MON2_24X80_8pouce_MN3D_G2.BIN`. |
+| `MON2_G2_MN3D_24X80_8_pouce.BIN` | 2516 | AD9B ✓ | Moniteur MON2 (MN3D), même configuration, partie haute (`F800h`-`FFFFh`, vecteurs du 6800 à la fin). Bannière `GOUPIL 1.4 8/81` en `F980h` : moniteur 24×80 V1.4 d'août 1981. Aussi fourni sous le nom `MON2_24X80_8pouce_MN3D_G2.BIN`. |
 | `VIDEO_G2_SMT.BIN` | 2716 | B38A ≠ B3A4 | Générateur de caractères « SMT-VIDEO ». |
 | `VIDEO_SMT_G2.BIN` | 2716 | B39C ≠ B3A4 | Deuxième dump de la même PROM, avec 2 octets d'écart (`0067h`, `0325h`). Aucun des deux ne donne la somme du tableau : au moins l'un des deux est altéré. Il faudrait refaire le dump. |
+
+**Octet de version.** Goupil Revue n° 2 (1982) indique que la version du moniteur se lit sous
+moniteur en `FD04h` (`+M FD04`) : `13` pour l'écran 16×64 et les disques 5" simple densité,
+`14` pour l'écran 24×80 et les disques 5", 8" ou durs. Dans MON2, `FD03h` contient
+`BITA #$14` : une instruction sans effet qui sert à loger l'octet de version à adresse fixe.
+Les PROM moniteur étaient de couleur différente selon la configuration : rouges (16×64),
+vertes (24×80), bleues (disque dur).
 
 ## Goupil 3 — `bios/G3/`
 
@@ -130,7 +138,7 @@ Le G3 accepte plusieurs cartes processeur : Z80, 6809 et 8088.
 
 | Fichier | EPROM | C.R.C | Description |
 |---|---|---|---|
-| `G3_Z80.2.8.BIN` | 2732 | E5A3 ✓ | Moniteur de la carte Z80 (Z80 2-8). |
+| `G3_Z80.2.8.BIN` | 2732 | E5A3 ✓ | Moniteur de la carte Z80, bannière « Moniteur Z80 - Goupil 3 - V 2.8 » : postérieur à la V2.3 du BIT n° 23 (09/1984). |
 | `UC09.2.1D-A_G3_6809.BIN` | 2764 | B26C ✓ | Moniteur `G3MON-6809 V2R0` de la carte 6809, partie basse (`4000h`-`5FFFh`). |
 | `UC09.2.3D-A_G3_6809.BIN` | 2764 | AD33 ✓ | Moniteur `G3MON-6809 V2R0`, partie haute (`6000h`-`7FFFh`, vecteurs du 6809 à la fin). Ce n'est pas une PROM à part : une instruction est à cheval sur les deux (`CMPA #'-'` en `5FFFh`). |
 | `UC88.1.6B-C.BIN` | 2716 | DCED ✓ | PROM de la carte 8088 (UC88-1/6B-C). |
@@ -140,6 +148,14 @@ Le G3 accepte plusieurs cartes processeur : Z80, 6809 et 8088.
 | `G3_8088_Test_PC.BIN` | 2764 | A054 | PROM de test d'usine : « Test cartes CPU, RAM/PROM 8088 et 640X400 », version du 19-8-84. |
 
 Écrans des moniteurs 8088 et 6809 : voir les [captures](captures/README.md#g3).
+
+**Versions d'après SMT.** Le bulletin d'information technique n° 23 (13/09/1984) liste les
+moniteurs alors en vigueur : 6809 `UC09.2 3D-B` V2R2, 8088 `RAPR.1 6B-C` + `RAPR.1 5B-C` V1R2,
+Z80 `Z80.2 1B-C` V2.3, UNIBUG `30-C` V2.3. Le moniteur 8088 du dépôt est exactement celui-là ;
+il est sur la carte RAM/PROM et sa mise à niveau demande d'ajouter le strap S13. Le 6809 du
+dépôt (V2R0, indice A) est antérieur : la V2R2 n'a pas été dumpée. Pour les disques Winchester,
+le moniteur 6809 doit être au moins en V1R3 (BIT n° 24). Le G3PC utilise d'autres PROM 8088,
+`RAPC 1.5C` et `RAPC 1.6C` (BIT n° 35, 1985).
 
 **Carte 6809.** Le moniteur `G3MON-6809 V2R0` (16 Ko en deux PROM) est le frère du
 G3MON-8088 : mêmes tables du 6845 et du clavier (accents compris), mêmes registres de la
@@ -159,6 +175,11 @@ commun avec le moniteur 6800 du G2. Ce qu'on lit dans le code :
 - les commandes B, G, I, M, O, P, R, S et T (T affiche la table des pages), sans
   commande d'aide ; erreur « ? », invite `+`. Touche COM (`D8h`) : mode terminal ;
   Ctrl + BOOT (`CAh`) : mode local.
+
+Goupil Revue n° 7 (1984) documente le service `SWI` + `FCB $0A` (`ACCMEM`) : A = octet de
+poids fort de l'adresse physique, B = page 6809 où la placer. Les entrées-sorties sont en
+`FF000h`-`FF7FFh` ; une fois mappées en `F000h`, l'ACIA 1 est en `F000h`-`F001h`, comme dans
+la ROM.
 
 ## Goupil 4 — `bios/G4/`
 
@@ -185,6 +206,12 @@ PC AT à 80286, BIOS `G4MON-286`.
 |---|---|---|---|
 | `CPU40.1.2K-C_G40_V1.BIN` + `CPU40.1.5J-C_G40_V1.BIN` | 27128 ×2 | 4C8B / 7375 | G40 V1, BIOS `G4MON-286 V1R3`. |
 | `PGM-C40.2.2K-J_G40_V1_V2.BIN` + `PGM-C40.2.5J-J_G40_V1_V2.BIN` | 27128 ×2 | 3000 ✓ / 7D00 ✓ | G40 V1/V2, BIOS `G4MON-286 V2R5` (C40.2-2K/J et 5J/J du tableau). |
+
+**Table des disques durs.** Les types 1 à 14 de `V1R3` sont ceux de la note SMT « Informations
+techniques diverses » du G40 : 306/4 (NEC 5124, 10 Mo), 615/4 (ST225, NEC 5126), 977/5
+(ST4051), 615/8 (NEC 5146), 925/5 (Wren II), 733/5 (ST4038), 823/10 (NEC 5452), 1024/9
+(ST4096, Wren II 80 Mo). `V2R5` remplace les types 8, 9 et 14 et ajoute un type 16 ; les types
+9, 14 et 16 sont à 34-35 secteurs par piste (disques RLL ou ESDI).
 
 La carte EGA Paradise et la carte vidéo V40GA du G40 sont rangées dans
 [Accessoires](#accessoires--biosaccessoires).
