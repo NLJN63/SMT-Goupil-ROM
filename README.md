@@ -11,10 +11,10 @@ Version PROM / Désignation / Type d'EPROM / C.R.C / Code article »), reproduit
 Les écrans de démarrage (POST) et de configuration (setup) de chaque ROM sont réunis dans
 [captures/](captures/README.md).
 
-Fonctions cachées des BIOS (API de vitesse `INT 15h AH=E0h/E1h`, vitesse « Auto »), dates des ROM
-vidéo, étiquettes `FFE8`, comparaison octet à octet des BIOS et recoupements avec la
-documentation SMT (Goupil Revue, NIG, BIT) :
-[docs/roms-decouvertes.md](docs/roms-decouvertes.md).
+Ce qui relie les BIOS entre eux (dates de livraison, BIOS quasi identiques, dates des ROM
+vidéo, étiquettes `FFE8`, chronologie, sources SMT consultées) est réuni
+[avant le catalogue](#ce-qui-relie-les-bios-entre-eux) ; le reste est rangé avec chaque
+machine.
 
 ## Lire ce catalogue
 
@@ -49,8 +49,129 @@ bios/
 ├── Accessoires/           claviers, cartes vidéo, contrôleur disque, carte réseau
 └── Utilitaires/           PROM d'effacement du mot de passe, utilitaire DOS du Club
 captures/                  écrans de démarrage et de setup, polices de caractères
-docs/                      nomenclature PROM de SMT-Goupil, carte de test G16, fonctions cachées des ROM
+docs/                      nomenclature PROM de SMT-Goupil, carte de test G16
 ```
+
+---
+
+## Ce qui relie les BIOS entre eux
+
+Relevés faits sur les 55 images de BIOS PC du dépôt (paires paire/impaire entrelacées) et
+recoupés avec la documentation SMT listée [à la fin de cette section](#sources-documentaires).
+
+### BIOS de même date
+
+| Date | BIOS |
+|---|---|
+| 21/09/88 | G40 V2R5, G5 286 V1R5 et V2R5, G50 V1R5 |
+| 26/06/89 | G5 S86 V1R3 et V2R3, Golf XT V1R3, Strator |
+| 07/11/89 | G5 286 V3R6, G5 386 V2R6, G50 V2R6, Golf SX V1R6 |
+| 11/01/90 | Golf 286 V1R6B, G50 V2R6B, PROM RAZ-PWR6 |
+| 12/04/90 | G5 SX V1R7, Golf SX V1R7, G50 V3R7 |
+| 15/06/90 | G5 286 V3R7 et V4R7, G5 386DX V1R7, G50 V2R7, Golf 286 V1R7 |
+| 04-06/03/91 | ISA16-B R3.4, ISA32-A R2, ISA32-B R2, ISA32-B R3.4 |
+
+Le chiffre R est le même pour tous les BIOS d'une même date (R5 en 1988, R6 fin 1989, R7 au
+printemps 1990). À partir de 1991, les BIOS portent le nom d'un
+bus (**ISA16** pour le 286, **ISA32** pour le 386/486, **EISA**) et non plus d'une machine.
+
+### BIOS quasi identiques (comparaison octet à octet)
+
+| Paire | Écart | Ce qui diffère |
+|---|---|---|
+| G5 S86 V2 `G5MON-86 V2R3` ↔ Golf XT `GLMON-86 V1R3` (= Strator) | **6 octets** | nom, version, sommes, et une constante d'initialisation disquette (`8A79` : `mov al,2` sur G5, `mov al,4` sur Golf) |
+| G5 286 `V3R7` ↔ G5 286 `V4R7` | **2 octets** | le chiffre de version et la somme |
+| G5 286 `V4R7` ↔ Golf 286 `GLMON-286 V1R7` | **4 octets** | nom, version, somme, et le délai d'attente de l'interruption disquette (`A204` : `mov al,0Ah` sur G5, `12h` sur Golf) |
+| G6 SX / SX AC / DX / 486 | identiques | une seule image V1R1.4 |
+| Golf SX `GLMON-SX V1R6` ↔ RAZ-PWR6 | 88 % identiques |  |
+| Golf SXC « DGI » ↔ G5 SX | — | le BIOS du Golf SXC s'annonce `G5MON-SXC V1R6B`, celui du G5 SX `G5MON-SXC V1R7` |
+| G5 SX V1R7 ↔ Golf SX V1R7 | 85 % identiques | même date 12/04/90 |
+| G5 386DX V1R7 ↔ G50 V2R7 | 81 % identiques | même date 15/06/90 |
+| G5 286 V3R6 ↔ G5 386 V2R6 | 85 % identiques | même date 07/11/89 |
+| ISA32-B R3.4 ↔ EISA-A R3.5 (G60) | 66 % identiques |  |
+
+Entre un Golf et le G5 de même génération, un seul octet fonctionnel diffère, dans la gestion
+du lecteur de disquette. Le cavalier E30 du Golf
+286 dépend du contrôleur de disquette WD37C65 monté (sans suffixe ou A/B, NIG 5).
+
+### Dates des ROM vidéo
+
+Chaque ROM vidéo porte sa propre date en `5FF5`, au même format MM/JJ/AA que celle du BIOS
+système en `FFF5`, à partir de `PVGA V3` (fin 1989).
+
+| BIOS | Date vidéo `5FF5` | Date système `FFF5` |
+|---|---|---|
+| G6 V1R1.4 | 8 août 1990 | 10 août 1990 |
+| G60 V1R3.1 | 5 nov. 1990 | 7 déc. 1990 |
+| ISA32-A R2 / B R2 / B R2.2 | 22 janv. 1991 | 5 mars / 5 mars / 1er févr. 1991 |
+| ISA32-B R3.4 | 7 févr. 1991 | 6 mars 1991 |
+| ISA16-B R3.4 | 15 févr. 1991 | 4 mars 1991 |
+| EISA-A R3.5 | 13 mars 1991 | 30 avril 1991 |
+| ATON EISA-A R3.6 / R3.9 | 26 / 27 déc. 1991 | 26 déc. 1991 / 13 avril 1992 |
+| ATON ISA-B R5.4 | 27 déc. 1991 | 23 avril 1996 |
+
+Par rapport à ISA32-B R2, ISA32-B R3.4 a une ROM vidéo plus récente (20 351 octets
+différents), un emplacement de copyright en `E004` et une aide du débogueur remaniée.
+
+### Étiquette en `FFE8`
+
+| BIOS | `FFE8` |
+|---|---|
+| G6 V1R1.4, G60 V1R3.1 | aucune |
+| ISA16-B R3.4 | `ABGOUPIL` |
+| ISA32-A R2 | `BAGOUPIL` |
+| ISA32-B R2, R3.4 | `BBGOUPIL` |
+| EISA-A R3.5, ATON EISA-A R3.6 | `CAGOUPIL` |
+| ATON EISA-A R3.9 | `CAATON  ` |
+| ATON ISA-B R5.4 | `BBATON  ` |
+
+La première lettre correspond au bus (A = ISA16, B = ISA32, C = EISA), la deuxième à la
+variante (A/B), la suite à l'éditeur. Aucun BIOS ne lit ces octets.
+
+### Débogueur intégré : 1 Ko perdu en R6 et R6B
+
+BIT 210 (28/08/1990) : avec les BIOS **VxR6 et VxR6B**, le débogueur intégré validé fait
+perdre 1 Ko de mémoire (visible avec CHKDSK) ; corrigé en VxR7. Dans les ROM : `sub word
+[40:13h],1` puis segment du Ko réservé rangé en `40:06h`, présent dans **toutes** les R6/R6B
+(G5 286 V3R6, G5 386 V2R6, G50 V2R6 et V2R6B, Golf 286 V1R6B, Golf SX V1R6, Golf SXC
+V1R6B, RAZ-PWR6) et dans **aucune** R5 ni R7. La routine suivante teste le port `84h` bit 0
+(accès débogueur).
+
+### Ce que les BIOS ne gèrent pas
+
+- **Lecteur de bande** : aucune des 55 images ne contient de code ni de texte de lecteur de
+  bande (`tape`, `streamer`, `QIC`, `bande`).
+- **Souris InPort** : aucun BIOS n'accède aux ports InPort (`23Ch`-`23Fh`). Voir le [G5](#carte-mère-du-g5--notice-schémas-et-notes-smt).
+
+### Chronologie
+
+| Date | Événement | Source |
+|---|---|---|
+| janv. 1988 | Golf 286 (test PCW) | nosher.net |
+| début 1990 | rachat de Normerel, devenu branche OEM | Tech Monitor 05/07/1990 |
+| avril 1990 | Golf 386SX annoncé | nosher.net |
+| juillet 1990 | gamme G6 annoncée (286, deux 386, 486), livraisons dès septembre | Tech Monitor |
+| 8-10 août 1990 | G6 V1R1.4 compilé | ROM |
+| déc. 1990 (sem. 49) | carte Golf 486 fabriquée | sérigraphie |
+| janv.-avril 1991 | ISA16 / ISA32 / EISA R2-R3.5 | ROM |
+| juin 1991 | dépôt de bilan de SMT-Goupil | Wikipédia |
+| 26-27 déc. 1991 | ROM vidéo et EISA R3.6 datées | ROM |
+| avril 1992 | ATON EISA-A R3.9 (G60) | ROM |
+| avril 1996 | ATON ISA-B R5.4 | ROM |
+
+### Sources documentaires
+
+Goupil Revue n° 1 à 7 (mars 1982 – 1984), NIG n° 5, 13, 14, 29, 30, BIT n° 19-27, 35-38,
+106, 200-212, notes « Informations techniques diverses » (G40, G3/G4/G40), notes diverses,
+notice mémoire G5 (05/1988), notice et schémas de la carte mère du G5, manuel du moniteur
+couleur multimode (1986), notes GoupilNet DOS 3.1 (1985). Compilations retronik.silicium.org
+(Bjorn Darkaad, 2024). Ces documents ne sont pas dans le dépôt.
+
+Autres informations tirées de ces documents :
+
+- **OS/2 1.0 et 1.1 adaptés par SMT** (NIG 14, 06/1989) : FDISK maison, 4 partitions, jusqu'à
+  128 Mo, démarrage sur n'importe quelle partition ; PROM EGA reconnue à toute adresse.
+- **3614 code SMTT** : NIG et BIT consultables sur Minitel.
 
 ---
 
@@ -132,6 +253,9 @@ moniteur en `FD04h` (`+M FD04`) : `13` pour l'écran 16×64 et les disques 5" si
 Les PROM moniteur étaient de couleur différente selon la configuration : rouges (16×64),
 vertes (24×80), bleues (disque dur).
 
+**Matériel** (Goupil Revue) : 16, 48 ou 64 Ko de mémoire (DRAM 4116) ; G2FLEX2 remonté de
+8 Ko pour préparer le passage au 6809 (FLEX9) ; disque Winchester 5" de 5 Mo sur WD1000.
+
 ## Goupil 3 — `bios/G3/`
 
 Le G3 accepte plusieurs cartes processeur : Z80, 6809 et 8088.
@@ -181,6 +305,13 @@ poids fort de l'adresse physique, B = page 6809 où la placer. Les entrées-sort
 `FF000h`-`FF7FFh` ; une fois mappées en `F000h`, l'ACIA 1 est en `F000h`-`F001h`, comme dans
 la ROM.
 
+**Machine** (Goupil Revue n° 4, 7 et notes) : sortie le 1er janvier 1983 ; deux cartes
+processeur parmi 6809, Z80 et 8088 peuvent cohabiter, choisies par commutateur ; la carte
+8088 n'a pas de RAM (carte 256 Ko obligatoire) ; bus compatible **G64** ; espace d'adresses
+de 1 Mo par pages de 4 Ko ; MS-DOS **2.06** (puis 2.11), jusqu'à 6 lecteurs A-F ; la
+configuration de base peut utiliser un **Minitel** comme clavier-écran ; cartes synthèse
+vocale Alcatel, IEEE-488, Vidéotex.
+
 ## Goupil 4 — `bios/G4/`
 
 PC compatible à 80186. PROM système en paire 11J/12J (V1) puis 7Q/7S (V2).
@@ -191,6 +322,12 @@ PC compatible à 80186. PROM système en paire 11J/12J (V1) puis 7Q/7S (V2).
 | `CPU.4.2.7Q-D_G4_V2.BIN` + `CPU.4.2.7S-D_G4_V2.BIN` | 27128 ×2 | 6E00 / 2B00 | G4 V2, BIOS `G4MON-186 V2R4` (indice D, plus ancien que celui du tableau). |
 | `CPU.4.2.7Q-E.BIN` + `CPU.4.2.7S-E.BIN` | 27128 ×2 | 7F00 ✓ / FB00 ✓ | G4 V2, BIOS `G4MON-186 V3R1`, indice E, la version du tableau. |
 | `G4V2R2_ARL2_7S-B.BIN` | 27128 | 32CE | G4 V2, BIOS `G4MON-186 V2R2`, PROM 7S seule (indice B). La PROM 7Q associée manque. |
+
+**Carte EGA** (notes SMT) : en V1R4 retirer E23 ; en V2R2 retirer E21 et mettre les contacts
+5 et 6 de SW1 sur ON.
+
+**Moniteur couleur multimode** (manuel de 1986) : 13", tube 370HYB22, 15,5 à 35 kHz
+automatique, CGA/EGA/PGA et analogique, pour G4 et G40. Fabricant non indiqué.
 
 ### Sources — `bios/G4/sources-V1R4/`
 
@@ -212,6 +349,8 @@ techniques diverses » du G40 : 306/4 (NEC 5124, 10 Mo), 615/4 (ST225, NEC 5126)
 (ST4051), 615/8 (NEC 5146), 925/5 (Wren II), 733/5 (ST4038), 823/10 (NEC 5452), 1024/9
 (ST4096, Wren II 80 Mo). `V2R5` remplace les types 8, 9 et 14 et ajoute un type 16 ; les types
 9, 14 et 16 sont à 34-35 secteurs par piste (disques RLL ou ESDI).
+
+**Coprocesseur 80287** (BIT 106) : la PAL `C40.3FB` remplace `C40.3FA` ; test `T287`.
 
 La carte EGA Paradise et la carte vidéo V40GA du G40 sont rangées dans
 [Accessoires](#accessoires--biosaccessoires).
@@ -271,6 +410,36 @@ Le « Goupil blanc » : un 286 fabriqué par **Normerel** et vendu par SMT-Goupi
 | `G286E_V3.05.IC9-F.BIN` + `G286E_V3.05.IC10-F.BIN` | 27C256 ×2 (27C512 au tableau) | D76B ≠ EE66 / 8495 ≠ 6C9A | BIOS Normerel V3.05, BIOS VGA du 30/01/1991 (indice F). Les sommes ne correspondent pas au tableau parce que le dump est **incomplet** : ces EPROM sont des 27C512 lues comme des 27C256, seule la moitié haute de chaque puce a été lue. Le BIOS saute dans la moitié manquante (`E000:4D20`) et ne peut pas démarrer. Puces d'origine plus disponibles : moitié basse perdue. Pour valider un dump complet s'il réapparaît (puces lues en 27C512, 64 Ko chacune) : IC9 `EE66` (moitié basse seule `16FB`), IC10 `6C9A` (moitié basse seule `E805`) ; les 32 derniers Ko doivent être identiques aux fichiers actuels. |
 | `ISA_16B_R3.4.IC9.BIN` + `ISA_16B_R3.4.IC10.BIN` | 27C256 ×2 | E500 / 8400 | BIOS SMT-Goupil `ISA16-B R3.4` (1985-1991) avec `PVGA MV1`, monté sur la même carte Normerel. |
 
+### Carte mère du G5 : notice, schémas et notes SMT
+
+- **Souris InPort** (schéma folio 22/29) : puce **MSMC** en 17L, le contrôleur de souris
+  Microsoft InPort (entrées XA/XB/YA/YB/SW1-3), sortie souris quadrature sur **P10**,
+  interruption IT3 (IRQ3, cavalier E1), décodage d'adresse par PAL16L8A 13L avec cavaliers
+  E27/E28 « ACCESS ». Aucun BIOS G5 ne gère la souris : ni InPort ni PS/2.
+- **Lecteur de carte à mémoire** (notice p. 45 et 50) : connecteur **P16** « Connexion d'un
+  lecteur de carte à mémoire », bord avant de la carte entre P6 (pile) et P13 (diode de
+  façade) ; **E21** présent = lecteur non installé (standard), **E22** présent = installé.
+  Schéma folio 23/29 : P16 (10 broches, 1 et 2 à la masse) est câblé sur le **même UART
+  NS16450 13A que COM1**. Deux récepteurs RS-232 75154 : 14A pour le connecteur arrière P3,
+  16A pour P16 ; les cavaliers **E21 à E24** choisissent lequel des deux alimente les
+  entrées de l'UART (RxD/CTS/DSR/DCD), et « les quatre doivent avoir la même position »
+  (aussi sur G5 286 rév. D et G5 386 rév. B). Les sorties passent par les 75150 15A/15B.
+  Aucun des 13 BIOS G5 ne contient de code ni de message pour ce lecteur.
+- **Autres cavaliers** : E10 lecteur de disquette bi-vitesse / mono-vitesse ; **E7, E8, E11
+  cavaliers de test en usine** ; E18, E19, E20, E30, E31 obligatoirement présents.
+- **Disques Conner CP3022 / CP342** (IDE à contrôleur intégré, BIT 201-203, 03/1990) :
+  cavalier dédié sur Golf 286, G5 286 V4 et G5 386 SX, avec une 3e position « contrôleur
+  externe ».
+- **Vidéo PVGA intégrée et SVGA 800×600** : G5 286 V4, Golf 286 et G5 386 SX ont un
+  oscillateur 36 MHz (en plus de 25,175 et 28,322 MHz) et un cavalier qui le valide « pour le
+  mode SVGA ». Sur le G5 286 VGA, les interrupteurs EGA de la façade (près de la prise souris)
+  ont disparu : tout passe par `MODE`.
+- **128 Ko cachés du G5 286 rév. D** : avec SW8 (façade) sur OFF et E16 retiré, 768 Ko
+  conventionnels ; les 128 Ko au-delà de 640 Ko sont en `D0000h`-`EFFFFh`, **non reconnus par
+  le BIOS**, à initialiser par logiciel avant lecture (sinon erreur de parité).
+- **Mémoire du G5 S86** : ses cartes mémoire de 1 Mo sont en mémoire **EMS** (pilote
+  `EMS.SYS`), alors que les G5 286/386 sont en mémoire étendue.
+
 ## Goupil 50 — `bios/G50/`
 
 386 avec BIOS `G50MON-386`. Sur cette machine, P désigne la PROM de droite et N celle de
@@ -287,6 +456,8 @@ gauche.
 | `G50_12P_V2R7_DD500Mo.BIN` + `G50_12N_V2R7_DD500Mo.BIN` | 27C256 ×2 | 4A00 / 2700 | V2R7 modifié pour un disque de 500 Mo : 3 octets changés sur la P, 6 sur la N. Les sommes ont été rééquilibrées. |
 | `MG50.33.U14-A.BIN` + `MG50.33.U15-A.BIN` | 27C256 ×2 | 5100 ✓ / 7200 ✓ | G50 V3 DX VGA 33 MHz, BIOS `G50MON-386 V3R7` du 12/04/90. |
 
+**G50 rév. B** : cavalier E3 EPROM 27512/27256, E28 zone `C0000h`-`CFFFFh` cachable.
+
 ## Goupil 6 — `bios/G6/`
 
 | Fichier | EPROM | C.R.C | Description |
@@ -300,6 +471,50 @@ gauche.
 | `ISA32B-R3.4.BIN` | 27C512 | 2500 ✓ | BIOS `ISA32-B R3.4` du 06/03/91, marqué **PROTO** dans le tableau. Aussi fourni sous le nom `G6_SX_ISA32B_R3_4.BIN`. |
 | `ISA32B_R2_G6_SX_MODIF_TYPE36.BIN` | 27C512 | 3000 | ISA32-B R2 modifié : 12 octets changés vers `E481h`-`E57Eh`, dans la table des disques durs, pour définir un type 36. La somme a été rééquilibrée. |
 | `G6ATON_ISA-B_R5.4.BIN` | 27C010 (128 Ko) | 1A00 | BIOS **ATON Systèmes `ISA-B R5.4`** du 23/04/96, dernière évolution de la lignée ISA-B, pour G6 486. Image de 128 Ko : BIOS vidéo `SVGA V5 ATON` en `0x00000` (24 Ko), vide de `0x08000` à `0x0FFFF`, BIOS système 64 Ko en `0x10000`. Ajoute la reconnaissance des i486DX2/DX4, l'option « Auto-LBA » pour les disques IDE de plus de 504 Mo et la copie du BIOS vidéo en mémoire shadow. Menus en anglais uniquement. Il faut une 27C010 et une carte qui présente la vidéo en `C0000h`. |
+
+### Fonctions cachées des BIOS ISA SMT
+
+**Vitesse du processeur par `INT 15h`.** Fonction non documentée, présente dans tous les BIOS
+ISA SMT (G6 V1R1.4 `937E`, ISA32-A R2 `940B`, ISA32-B R2 `9430`, ISA32-B R3.4 `889F`),
+absente de l'ATON.
+
+```
+9430: cmp ah,0E0h ; jb ...      INT 15h AH=E0h : régler la vitesse
+9435: cmp ah,0E1h ; ja erreur   INT 15h AH=E1h : lire la vitesse
+```
+
+- `AH=E0h`, `AL=0` haute, `1` basse, `2` auto. `AL>2` → `AH=86h`, CF=1.
+- `AH=E1h` → `AL=0` haute, `1` basse, `2` auto. Retour CF=0, AH=0.
+
+Registre système Goupil, port `84h` : bit 0 accès débogueur, **bit 3 vitesse basse**,
+**bit 4 mode auto**. Test sous DEBUG : `A 100` / `MOV AH,E1` / `INT 15` / `INT 3` / `G=100` → AL.
+
+**Vitesse « Auto ».** Dans l'interruption horloge (INT 08h, ISA32-B R2 `9EC0`-`9EF5`) : si le
+mode auto est actif (port `84h` bit 4) et qu'un moteur de disquette tourne (`40:3F` bits
+0-3), le BIOS passe en vitesse basse (bit 3 à 1). Quand le délai d'arrêt moteur coupe le
+lecteur (écriture en `3F2h`), il repasse en vitesse haute. L'aide du setup ATON, qui reprend
+la fonction, indique : « AUTO is used with MS/DOS to support floppy based software protection
+keys ».
+
+### Souris PS/2 et InPort
+
+Code et messages souris PS/2 (`<Mouse clock line error>`, `Souris standard reconnue`)
+présents dans G6 V1R1.4, G60 V1R3.1, ISA16-B R3.4, ISA32-B R2/R2.2/R3.4 et ATON ; absents de
+tous les G5, G50, Golf XT/286/SX et de **ISA32-A R2**. ISA32-A R2 et ISA32-B R2 : même date,
+ROM vidéo identique, 92 % de code commun ; B R2 contient en plus environ 900 octets de gestion
+PS/2 (`98D7`-`9C5D`).
+
+### Du G6 à l'ATON
+
+- ISA32-B R2 ↔ G6 V1R1.4 : 69 % identiques ; ISA32-B R2 ↔ R3.4 : 77 %.
+- ATON et ISA32-B R3.4 : même emplacement de copyright en `F000:E004`, même terminateur `@`
+  (`ATON-SYSTEMES (C)1993@`).
+- ROM vidéo ATON : 1265 octets différents de la ROM vidéo SMT, pointeurs décalés par
+  blocs.
+- ISA32-B R3.4 contient une entrée 80286 dans sa table des processeurs.
+- La table des processeurs de l'ATON ajoute i386DX/SX/SL et i486DX/SX/DX2/DX4.
+- Numérotation des ASIC SMT `L5Axxxx`, du G5 (`CPU286-MEM` `L5A0478`/`L5A0680`) au Golf 486
+  (`L5A1110`, `L5A1111`, `L5A6027`, `L5A6373`).
 
 ## Goupil 60 — `bios/G60/`
 
@@ -406,6 +621,9 @@ doublant chaque caractère en mémoire.
 
 Notation des PROM : celle de la colonne « Désignation / indice PROM » du tableau SMT. Pour `MGSX.1.11M/E`, « MGSX.1 » est la désignation de la PROM du Golf SX, « 11M » son support sur la carte et la lettre après la barre l'**indice**, qui avance à chaque révision du contenu. Le tableau ne donne que le dernier indice de chaque PROM : V1R7 = E pour le Golf SX (C = V1R6 ; l'indice D n'est pas retrouvé), V1R7 = D pour le Golf 286 (C = V1R6B). Dans les noms de fichiers, la barre devient un tiret.
 
+L'ISA32-A R2 n'a pas de gestion de souris PS/2, contrairement à l'ISA32-B R2 : voir
+[Souris PS/2 et InPort](#souris-ps2-et-inport).
+
 ### Golf 486
 
 Le Golf 486 a sa propre carte mère, spécifique au Golf : ce n'est pas une carte ISA32-B de G6. Elle partage en revanche le même BIOS que les cartes mères ISA32-B : son BIOS d'origine est `bios/G6/ISA32B-R2.BIN`. Un dump fait sur la machine (`DUMP_GOLF486.BIN`) est identique octet pour octet à ce fichier, il n'est donc pas stocké une seconde fois.
@@ -462,6 +680,14 @@ Autotest et SET-UP : voir les [captures](captures/README.md#sfena-5090).
 | `Disque-Xebec-G4/XEBEC_G4_10413BG.BIN` | 2732 | 8A32 | Micrologiciel du Z80 d'un contrôleur de disque dur Xebec (étiquette 10413BG), et non une ROM d'extension PC. Il présente au PC l'interface AT du WD1003 (registres en `1F0h`-`1F7h` : restore, lecture, écriture, vérification, formatage, seek, diagnostic, paramètres), celle qu'emploient les BIOS du G40 ; les BIOS du G4 attendent un contrôleur XT en `320h`. L'étiquette « G4 » est donc à vérifier. Pas de table de disques (elle est dans le BIOS système) ; 17 secteurs par piste (MFM). |
 | `GoupilNet/goupilnet2-3JD.BIN` | 27C256 | 9700 | Micrologiciel de la carte réseau **GoupilNet 2** (3JD), version 2.00 : noyau temps réel (`SYSTEME`, `DRIVERS`, `cmd_task`) et piles X.25, SNA/QLLC, TNS et NetBIOS. Fourni deux fois (seul et dans un zip), même contenu. |
 | `Carte-test-G16/G16TEST.BIN` | 27C256 | 2200 | ROM de la **carte de test G16** de SMT-Goupil : `G16TEST #1.0` du 03/09/90. C'est une ROM d'extension de 32 Ko (en-tête `55 AA`), lancée par le BIOS pendant le POST. Elle contient une suite de tests de production en anglais avec trois modes : *Go/Nogo*, *Assembly* et *Burning* (déverminage). Elle se configure selon le nombre de disquettes et de disques durs, propose des chaînes de tests programmables et tient des compteurs de tests et d'erreurs. Carte TEST80-V2 qui la porte, lecture des 8 LED du port 80h, codes du POST et bips des BIOS reconnus par G16 TEST : [docs/carte-test-g16.md](docs/carte-test-g16.md). |
+
+**GoupilNet (1985-1987)**, d'après les notes GoupilNet DOS 3.1 : Microsoft Networks (MS-NET)
+adapté par SMT pour MS-DOS 3.1 (« Microsoft Networks SERVER Version 1.0 », © Microsoft - SMT
+Goupil 1985) : REDIR, XPORT, SESSION, FSERVER. Cartes « transporteur » pour Goupil 3-PC et
+G4, adresse 00h-3Fh par micro-interrupteurs, recopiée dans le fichier `NETADDR` (adresse sur
+20 octets, l'octet suivant réservé à une passerelle télécommunications), bus deux fils avec
+résistance de fin de ligne. Sans rapport avec la carte GoupilNet 2 ci-dessus (X.25, SNA,
+NetBIOS). La couche physique n'est décrite dans aucun des documents.
 
 ## Utilitaires — `bios/Utilitaires/`
 
