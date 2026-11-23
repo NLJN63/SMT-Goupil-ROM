@@ -140,7 +140,8 @@ V1R6B, RAZ-PWR6) et dans **aucune** R5 ni R7. La routine suivante teste le port 
 ### Ce que les BIOS ne gèrent pas
 
 - **Lecteur de bande** : aucune des 55 images ne contient de code ni de texte de lecteur de
-  bande (`tape`, `streamer`, `QIC`, `bande`).
+  bande (`tape`, `streamer`, `QIC`, `bande`), alors que le manuel technique du G5-286
+  réserve le canal DMA 1 au streamer.
 - **Souris InPort** : aucun BIOS n'accède aux ports InPort (`23Ch`-`23Fh`). Voir le [G5](#carte-mère-du-g5--notice-schémas-et-notes-smt).
 
 ### Chronologie
@@ -165,7 +166,8 @@ Goupil Revue n° 1 à 7 (mars 1982 – 1984), NIG n° 5, 13, 14, 29, 30, BIT n°
 106, 200-212, notes « Informations techniques diverses » (G40, G3/G4/G40), notes diverses,
 notice mémoire G5 (05/1988), notice et schémas de la carte mère du G5, manuel du moniteur
 couleur multimode (1986), notes GoupilNet DOS 3.1 (1985). Compilations retronik.silicium.org
-(Bjorn Darkaad, 2024). Ces documents ne sont pas dans le dépôt.
+(Bjorn Darkaad, 2024), manuel technique G5-286 (chap. 4.13, DMA). Ces documents ne sont pas
+dans le dépôt.
 
 Autres informations tirées de ces documents :
 
@@ -424,6 +426,9 @@ Le « Goupil blanc » : un 286 fabriqué par **Normerel** et vendu par SMT-Goupi
   16A pour P16 ; les cavaliers **E21 à E24** choisissent lequel des deux alimente les
   entrées de l'UART (RxD/CTS/DSR/DCD), et « les quatre doivent avoir la même position »
   (aussi sur G5 286 rév. D et G5 386 rév. B). Les sorties passent par les 75150 15A/15B.
+  Broches de P16 relevées sur le folio 23/29 : 1 et 2 à la masse, **4 et 7 au +12 V**
+  (alimentation des émetteurs 75150). Un lecteur série du
+  commerce se branche sur le COM1 arrière (P3), cavaliers E21 à E24 en position standard.
   Aucun des 13 BIOS G5 ne contient de code ni de message pour ce lecteur.
 - **Autres cavaliers** : E10 lecteur de disquette bi-vitesse / mono-vitesse ; **E7, E8, E11
   cavaliers de test en usine** ; E18, E19, E20, E30, E31 obligatoirement présents.
@@ -439,6 +444,15 @@ Le « Goupil blanc » : un 286 fabriqué par **Normerel** et vendu par SMT-Goupi
   le BIOS**, à initialiser par logiciel avant lecture (sinon erreur de parité).
 - **Mémoire du G5 S86** : ses cartes mémoire de 1 Mo sont en mémoire **EMS** (pilote
   `EMS.SYS`), alors que les G5 286/386 sont en mémoire étendue.
+- **DMA** (manuel technique G5-286, chap. 4.13) : les deux
+  contrôleurs 8237A-5 sont intégrés au circuit **82C206** et travaillent en cascade. DMAC1
+  (8 bits, ports `00h`-`0Fh`) : canal 0 réservé (rafraîchissement sur PC), **1 streamer**,
+  2 lecteur de disquettes, 3 libre. DMAC2 (16 bits, ports `C0h`-`DEh`) : canal 4 cascade,
+  5 à 7 libres. Registres de page : canaux 0 à 3 en `87h`, `83h`, `81h`, `82h`, canaux 5 à 7
+  en `8Bh`, `89h`, `8Ah`, rafraîchissement en `8Fh`. Un transfert ne doit pas franchir une
+  frontière de 64 Ko (canaux 0 à 3, compte en octets) ou de 128 Ko (canaux 5 à 7, compte en
+  mots). Le POST teste exactement ces sept registres de page (masque `0E8Eh` : `81h`, `82h`,
+  `83h`, `87h`, `89h`, `8Ah`, `8Bh`), pas celui du rafraîchissement.
 
 ## Goupil 50 — `bios/G50/`
 

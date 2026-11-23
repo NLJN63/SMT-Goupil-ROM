@@ -115,7 +115,7 @@ Le découpage diffère seulement à partir de `34h`.
 | `08` | 2 longs | somme de contrôle de la ROM du BIOS | idem | idem |
 | `0C` | 3 longs | lignes de données de la CMOS (écriture puis relecture) | idem | idem |
 | `10`, `11` | 4 longs (+1 court) | timer 8254, compteur 1 (rafraîchissement) : ne compte pas, reste bloqué | idem | idem |
-| `14`-`17` | 5 longs (+0 à 3 courts) | contrôleur DMA 8237 (`14`, `15`) | DMA n° 1, DMA n° 2, registres de page, bit de rafraîchissement du port `61h` | idem B |
+| `14`-`17` | 5 longs (+0 à 3 courts) | contrôleur DMA 8237 (`14`, `15`) | DMA n° 1, DMA n° 2, registres de page (`81h`, `82h`, `83h`, `87h`, `89h`, `8Ah`, `8Bh`), bit de rafraîchissement du port `61h` | idem B |
 | `18` | 6 longs | **64 premiers Ko de RAM** | idem | idem |
 | `1C` | – | contrôleur d'interruptions 8259 | pile en RAM, vecteurs d'interruption | idem B |
 | `20`-`22` | B, C : 8 longs (+1 court) | ports `61h`/`62h` (parité, NMI) | contrôleur clavier 8042 : `20` pas de réponse, `21` autotest ; `22` étape suivante | idem B |
